@@ -18,7 +18,7 @@ defmodule RuleEngine.AST do
   A logic check is an expression which combines expressions
   logically.
   All parameters are expected to be of boolean types.
-  Any non-boolean types will be ignored!
+  Any non-boolean types will result in a runtime error!
   Empty inputs (after filtering to only boolean types) will
   be considered false.
   Logic parameters may be shirt circuited and therefore should
@@ -52,6 +52,15 @@ defmodule RuleEngine.AST do
   * `:not` - expects a single boolean expression
   * `:is_nil` - expects a reference-value expression,
     is true for empty maps and lists as well.
+
+  For simple conditional logic, the following list functions are available.
+  Only at most one subtree will be executed.
+  Function may be:
+  * `:cond` - Executes each list item's first element, when true,
+    the other elements in that list will be executed.
+    When false or nil, the other elements in that list will not be executed.
+    Any other value for the first element than true, false, and nil, will
+    result in a runtime error!
 
   As function calls may need to be assembled on the fly
   with function names as values and values as parameters,
@@ -94,14 +103,17 @@ defmodule RuleEngine.AST do
   * Into
   * Reduce
 
-  *TODO: other logic functions like:*
-  * condition
+  To use external functions provided by the caller, the following
+  get-like function may be used.
+  Function may be:
+  * `:access`
+
   """
 
   require Record
   Record.defrecord :apply_fun, fun: nil, values: []
-  Record.defrecord :list, values: []
   def literal(v), do: apply_fun(fun: :literal, values: [v])
+  def list(v), do: apply_fun(fun: :escaped_list, values: v)
   def app(fun, vals) when is_list(vals),
     do: apply_fun(fun: fun, values: vals)
 end

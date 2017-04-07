@@ -10,15 +10,14 @@ defmodule RuleEngine.Eval do
   """
   @spec exec([tuple], %{}, %{})
     :: {:ok, %{}}
-    |  {:error, String.t, %{}}
+    |  {:error, any, %{}}
   def exec(ops, state, accessors \\ %{}) do
-    Enum.reduce_while(ops, {:ok, state}, fn op, {:ok, s} ->
-      case eval_app(op, s, accessors) do
-        {:ok, _, ns} -> {:cont, {:ok, ns}}
-        {:error, err, ns} -> {:halt, {:error, err, ns}}
-        what -> {:halt, {:error, {:internal_error, what}}}
-      end
-    end)
+    case eval_list(ops, state, accessors) do
+      {:ok, _, st} -> {:ok, st}
+      {:error, err, st} -> {:error, err, st}
+    end
+  #rescue
+  #  err -> {:error, {:internal_error, err}, nil}
   end
 
   def eval_app(op, state, access \\ %{}) do
@@ -31,6 +30,17 @@ defmodule RuleEngine.Eval do
       )
   end
 
+  def eval_list(ops, state, access \\ %{}) do
+    Enum.reduce_while(ops, {:ok, nil, state}, fn op, {:ok, _, s} ->
+      case eval_app(op, s, access) do
+        {:ok, val, ns} -> {:cont, {:ok, val, ns}}
+        {:error, err, ns} -> {:halt, {:error, err, ns}}
+      end
+    end)
+  end
+  defp eval(:escaped_list, val, s, _) do
+    {:ok, val, s}
+  end
   defp eval(:and, [], s, _) do
     {:ok, false, s}
   end
@@ -112,7 +122,7 @@ defmodule RuleEngine.Eval do
     one_param(fn v, ns ->
       cond do
         is_boolean(v) -> {:ok, not(v), ns}
-        true -> {:error, :not_boolean, ns}
+        true -> {:error, {:not_boolean, v}, ns}
       end
     end, false, ops, state, access)
   end
@@ -123,12 +133,35 @@ defmodule RuleEngine.Eval do
     end, true, ops, state, access)
   end
 
+  defp eval(:cond, ops, state, access) do
+    Enum.reduce_while(ops, {:ok, nil, state}, fn op, {_, old, s} ->
+      res1 = eval_app(op, s, access)
+      case res1 do
+        {:ok, [c | ops], ns1} ->
+          res2 = eval_app(c, ns1, access)
+          case res2 do
+            {:ok, true, ns2} ->
+              res3 = eval_list(ops, ns2, access)
+              case res3 do
+                {:ok, result, ns3} -> {:halt, {:ok, result, ns3}}
+                {:error, _, _} -> {:halt, res3}
+              end
+            {:ok, nil, ns2} -> {:cont, {:ok, old, ns2}}
+            {:ok, false, ns2} -> {:cont, {:ok, old, ns2}}
+            {:ok, bad, ns2} -> {:halt, {:error, {:not_boolean, bad}, ns2}}
+          end
+        {:ok, [], ns1} ->  {:halt, {:error, :no_conditions, ns1}}
+        {:error, _, _} -> {:halt, res1}
+      end
+    end)
+  end
+
   defp eval(:substring, ops, state, access) do
     two_param(fn str, sub, ns ->
-      is_str = is_binary(str) && is_binary(sub)
       cond do
-        is_str -> {:ok, String.contains?(str, sub), ns}
-        true -> {:error, :not_string , ns}
+        not(is_binary(str)) -> {:error, {:not_string, str}, ns}
+        not(is_binary(sub)) -> {:error, {:not_string, sub}, ns}
+        true -> {:ok, String.contains?(str, sub), ns}
       end
     end, false, ops, state, access)
   end
@@ -154,8 +187,9 @@ defmodule RuleEngine.Eval do
     res = eval_app(op, state, access)
     case res do
       {:ok, false, ns} -> {:cont, {false, ns}}
+      {:ok, nil, ns} -> {:cont, {false, ns}}
       {:ok, true, ns} -> {:halt, {true, ns}}
-      {:ok, _, ns} -> {:cont, {false, ns}}
+      {:ok, bad, ns} -> {:halt, {:error, {:not_boolean, bad}, ns}}
       {:error, err, ns} -> {:halt, {:error, err, ns}}
     end
   end
@@ -165,7 +199,7 @@ defmodule RuleEngine.Eval do
     case res do
       {:ok, true, ns} -> {:cont, {true, ns}}
       {:ok, false, ns} -> {:halt, {false, ns}}
-      {:ok, _, ns} -> {:cont, {true, ns}}
+      {:ok, bad, ns} -> {:halt, {:error, {:not_boolean, bad}, ns}}
       {:error, err, ns} -> {:halt, {:error, err, ns}}
     end
   end

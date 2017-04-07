@@ -56,11 +56,14 @@ defmodule RuleEngineTest do
   test "greater than or equal" do
     st = %{}
     op1 = app(:greater_than_or_equals, [literal(1), literal(2)])
-    {:ok, false, ^st} = eval_app(op1, st)
+    {:ok, false, ns1} = eval_app(op1, st)
+    assert ns1 == st
     op2 = app(:greater_than_or_equals, [literal(1), literal(1)])
-    {:ok, true, ^st} = eval_app(op2, st)
+    {:ok, true, ns2} = eval_app(op2, st)
+    assert ns2 == st
     op3 = app(:greater_than_or_equals, [literal(1), literal(0)])
-    {:ok, true, ^st} = eval_app(op3, st)
+    {:ok, true, ns3} = eval_app(op3, st)
+    assert ns3 == st
   end
 
   test "not" do
@@ -130,9 +133,12 @@ defmodule RuleEngineTest do
 
   test "literal" do
     st = %{}
-    {:ok, 1, ^st} = eval_app(literal(1), st)
-    {:ok, true, ^st} = eval_app(literal(true), st)
-    {:ok, "hello", ^st} = eval_app(literal("hello"), st)
+    {:ok, 1, ns1} = eval_app(literal(1), st)
+    assert ns1 == st
+    {:ok, true, ns2} = eval_app(literal(true), st)
+    assert ns2 == st
+    {:ok, "hello", ns3} = eval_app(literal("hello"), st)
+    assert ns3 == st
   end
 
   test "and all true" do
@@ -144,18 +150,24 @@ defmodule RuleEngineTest do
     {:ok, true, ^st} = eval_app(op1, st)
   end
 
-  test "and some true" do
+  test "and some true (true first)" do
     op1 = app(:and, [
       literal(true),
       literal(false),
       ])
     st = %{}
-    {:ok, false, ^st} = eval_app(op1, st)
-    op2 = app(:and, [
+    {:ok, false, ns} = eval_app(op1, st)
+    assert ns == st
+  end
+
+  test "and some true (true second)" do
+    op = app(:and, [
       literal(false),
       literal(true),
       ])
-    {:ok, false, ^st} = eval_app(op2, st)
+    st = %{}
+    {:ok, false, ns} = eval_app(op, st)
+    assert ns == st
   end
 
   test "and all false" do
@@ -164,7 +176,8 @@ defmodule RuleEngineTest do
       literal(false),
       ])
     st = %{}
-    {:ok, false, ^st} = eval_app(op1, st)
+    {:ok, false, ns} = eval_app(op1, st)
+    assert ns == st
   end
 
   test "or all true" do
@@ -173,20 +186,28 @@ defmodule RuleEngineTest do
       literal(true),
       ])
     st = %{}
-    {:ok, true, ^st} = eval_app(op1, st)
+    {:ok, true, ns} = eval_app(op1, st)
+    assert ns == st
   end
-  test "or some true" do
-    op1 = app(:or, [
+
+  test "or some true (true first)" do
+    op = app(:or, [
       literal(true),
       literal(false),
       ])
     st = %{}
-    {:ok, true, ^st} = eval_app(op1, st)
-    op2 = app(:or, [
+    {:ok, true, ns} = eval_app(op, st)
+    assert ns == st
+  end
+
+  test "or some true (true second)" do
+    op = app(:or, [
       literal(false),
       literal(true),
       ])
-    {:ok, true, ^st} = eval_app(op2, st)
+    st = %{}
+    {:ok, true, ns} = eval_app(op, st)
+    assert ns == st
   end
 
   test "or all false" do
@@ -195,7 +216,30 @@ defmodule RuleEngineTest do
       literal(false),
       ])
     st = %{}
-    {:ok, false, ^st} = eval_app(op1, st)
+    {:ok, false, ns} = eval_app(op1, st)
+    assert ns == st
+  end
+
+  test "substring true" do
+    op1 = app(:substring, [
+      literal("hello"),
+      literal("ll"),
+      ])
+    st = %{}
+    {:ok, val, ns} = eval_app(op1, st)
+    assert ns == st
+    assert val == true
+  end
+
+  test "substring false" do
+    op1 = app(:substring, [
+      literal("hello"),
+      literal("yolo"),
+      ])
+    st = %{}
+    {:ok, val, ns} = eval_app(op1, st)
+    assert ns == st
+    assert val == false
   end
 
   test "exec set, get, and, or" do
@@ -241,6 +285,70 @@ defmodule RuleEngineTest do
       "OR-false" => false,
       "OR-true" => true
     }
-    {:ok, ^expects} = exec(ast, %{})
+    {:ok, ns} = exec(ast, %{})
+    assert ns == expects
   end
+
+  test "cond none true" do
+    op = app(:cond, [
+      list([
+        literal(false),
+        app(:set, [literal("bad-1"), literal(true)]),
+        ]),
+      list([
+        app(:equals, [literal(1), literal(2)]),
+        app(:set, [literal("bad-2"), literal(true)]),
+        ])
+      ])
+    st = %{}
+    {:ok, val, ns} = eval_app(op, st)
+    assert ns == st
+    assert val == nil
+  end
+
+  test "cond one true" do
+    op1 = app(:cond, [
+      list([
+        literal(false),
+        app(:set, [literal("bad-1"), literal(true)]),
+        ]),
+      list([
+        app(:equals, [literal(1), literal(1)]),
+        app(:set, [literal("good-2"), literal(true)]),
+        ])
+      ])
+    st = %{}
+    expects = %{
+      "good-2" => true
+    }
+    {:ok, val, ns} = eval_app(op1, st)
+    assert ns == expects
+    assert val == nil
+  end
+
+  test "cond multiple true" do
+    op1 = app(:cond, [
+      list([
+        literal(false),
+        app(:set, [literal("bad-1"), literal(true)]),
+        ]),
+      # only good-2 is expected to execute
+      list([
+        app(:equals, [literal(1), literal(1)]),
+        app(:set, [literal("good-2"), literal(true)]),
+        ]),
+      list([
+        app(:equals, [literal(1), literal(1)]),
+        app(:set, [literal("good-3"), literal(true)]),
+        ])
+      ])
+    st = %{}
+    expects = %{
+      "good-2" => true
+    }
+    {:ok, val, ns} = eval_app(op1, st)
+    assert ns == expects
+    assert val == nil
+  end
+
 end
