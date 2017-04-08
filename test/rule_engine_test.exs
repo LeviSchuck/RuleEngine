@@ -8,78 +8,118 @@ defmodule RuleEngineTest do
   test "equals true" do
     op = app(:equals, [literal(1), literal(1)])
     st = %{}
-    {:ok, true, ^st} = eval_app(op, st)
+    {:ok, true, ^st, _} = eval_app(op, st)
   end
 
   test "equals false" do
     op = app(:equals, [literal(1), literal(2)])
     st = %{}
-    {:ok, false, ^st} = eval_app(op, st)
+    {:ok, false, ^st, _} = eval_app(op, st)
   end
 
   test "equals incomplete false" do
     op = app(:equals, [literal(1)])
     st = %{}
-    {:ok, false, ^st} = eval_app(op, st)
+    {:ok, false, ns, _} = eval_app(op, st)
+    assert ns == st
   end
 
   test "less than" do
     st = %{}
     op1 = app(:less_than, [literal(1), literal(2)])
-    {:ok, true, ^st} = eval_app(op1, st)
+    {:ok, v1, ns1, _} = eval_app(op1, st)
+    assert v1 == true
+    assert ns1 == st
+
     op2 = app(:less_than, [literal(1), literal(1)])
-    {:ok, false, ^st} = eval_app(op2, st)
+    {:ok, v2, ns2, _} = eval_app(op2, st)
+    assert v2 == false
+    assert ns2 == st
+
     op3 = app(:less_than, [literal(1), literal(0)])
-    {:ok, false, ^st} = eval_app(op3, st)
+    {:ok, v3, ns3, _} = eval_app(op3, st)
+    assert v3 == false
+    assert ns3 == st
   end
 
   test "greater than" do
     st = %{}
     op1 = app(:greater_than, [literal(1), literal(2)])
-    {:ok, false, ^st} = eval_app(op1, st)
+    {:ok, v1, ns1, _} = eval_app(op1, st)
+    assert v1 == false
+    assert ns1 == st
+
     op2 = app(:greater_than, [literal(1), literal(1)])
-    {:ok, false, ^st} = eval_app(op2, st)
+    {:ok, v2, ns2, _} = eval_app(op2, st)
+    assert v2 == false
+    assert ns2 == st
+
     op3 = app(:greater_than, [literal(1), literal(0)])
-    {:ok, true, ^st} = eval_app(op3, st)
+    {:ok, v3, ns3, _} = eval_app(op3, st)
+    assert v3 == true
+    assert ns3 == st
   end
 
   test "less than or equal" do
     st = %{}
     op1 = app(:less_than_or_equals, [literal(1), literal(2)])
-    {:ok, true, ^st} = eval_app(op1, st)
+    {:ok, v1, ns1, _} = eval_app(op1, st)
+    assert v1 == true
+    assert ns1 == st
+
     op2 = app(:less_than_or_equals, [literal(1), literal(1)])
-    {:ok, true, ^st} = eval_app(op2, st)
+    {:ok, v2, ns2, _} = eval_app(op2, st)
+    assert v2 == true
+    assert ns2 == st
+
     op3 = app(:less_than_or_equals, [literal(1), literal(0)])
-    {:ok, false, ^st} = eval_app(op3, st)
+    {:ok, v3, ns3, _} = eval_app(op3, st)
+    assert v3 == false
+    assert ns3 == st
   end
 
   test "greater than or equal" do
     st = %{}
     op1 = app(:greater_than_or_equals, [literal(1), literal(2)])
-    {:ok, false, ns1} = eval_app(op1, st)
+    {:ok, v1, ns1, _} = eval_app(op1, st)
+    assert v1 == false
     assert ns1 == st
+
     op2 = app(:greater_than_or_equals, [literal(1), literal(1)])
-    {:ok, true, ns2} = eval_app(op2, st)
+    {:ok, v2, ns2, _} = eval_app(op2, st)
+    assert v2 == true
     assert ns2 == st
+
     op3 = app(:greater_than_or_equals, [literal(1), literal(0)])
-    {:ok, true, ns3} = eval_app(op3, st)
+    {:ok, v3, ns3, _} = eval_app(op3, st)
+    assert v3 == true
     assert ns3 == st
   end
 
   test "not" do
     st = %{}
     op1 = app(:not, [literal(true)])
-    {:ok, false, ^st} = eval_app(op1, st)
+    {:ok, v1, ns1, _} = eval_app(op1, st)
+    assert v1 == false
+    assert ns1 == st
+
     op2 = app(:not, [literal(false)])
-    {:ok, true, ^st} = eval_app(op2, st)
+    {:ok, v2, ns2, _} = eval_app(op2, st)
+    assert v2 == true
+    assert ns2 == st
   end
 
   test "is_nil" do
     st = %{}
     op1 = app(:is_nil, [literal(true)])
-    {:ok, false, ^st} = eval_app(op1, st)
+    {:ok, v1, ns1, _} = eval_app(op1, st)
+    assert v1 == false
+    assert ns1 == st
+
     op2 = app(:is_nil, [literal(nil)])
-    {:ok, true, ^st} = eval_app(op2, st)
+    {:ok, v2, ns2, _} = eval_app(op2, st)
+    assert v2 == true
+    assert ns2 == st
   end
 
   test "set over nothing" do
@@ -120,24 +160,26 @@ defmodule RuleEngineTest do
   test "get nil" do
     op = app(:get, [literal(1), literal(true)])
     st = %{}
-    {:ok, val, ^st} = eval_app(op, st)
+    {:ok, val, ns, _} = eval_app(op, st)
+    assert ns == st
     assert val == nil
   end
 
   test "get val" do
     op = app(:get, [literal(1), literal(true)])
     st = %{1 => true}
-    {:ok, val, _} = eval_app(op, st)
+    {:ok, val, ns, _} = eval_app(op, st)
+    assert ns == st
     assert val == true
   end
 
   test "literal" do
     st = %{}
-    {:ok, 1, ns1} = eval_app(literal(1), st)
+    {:ok, 1, ns1, _} = eval_app(literal(1), st)
     assert ns1 == st
-    {:ok, true, ns2} = eval_app(literal(true), st)
+    {:ok, true, ns2, _} = eval_app(literal(true), st)
     assert ns2 == st
-    {:ok, "hello", ns3} = eval_app(literal("hello"), st)
+    {:ok, "hello", ns3, _} = eval_app(literal("hello"), st)
     assert ns3 == st
   end
 
@@ -147,7 +189,8 @@ defmodule RuleEngineTest do
       literal(true),
       ])
     st = %{}
-    {:ok, true, ^st} = eval_app(op1, st)
+    {:ok, true, ns, _} = eval_app(op1, st)
+    assert ns == st
   end
 
   test "and some true (true first)" do
@@ -156,7 +199,7 @@ defmodule RuleEngineTest do
       literal(false),
       ])
     st = %{}
-    {:ok, false, ns} = eval_app(op1, st)
+    {:ok, false, ns, _} = eval_app(op1, st)
     assert ns == st
   end
 
@@ -166,7 +209,7 @@ defmodule RuleEngineTest do
       literal(true),
       ])
     st = %{}
-    {:ok, false, ns} = eval_app(op, st)
+    {:ok, false, ns, _} = eval_app(op, st)
     assert ns == st
   end
 
@@ -176,7 +219,7 @@ defmodule RuleEngineTest do
       literal(false),
       ])
     st = %{}
-    {:ok, false, ns} = eval_app(op1, st)
+    {:ok, false, ns, _} = eval_app(op1, st)
     assert ns == st
   end
 
@@ -186,7 +229,7 @@ defmodule RuleEngineTest do
       literal(true),
       ])
     st = %{}
-    {:ok, true, ns} = eval_app(op1, st)
+    {:ok, true, ns, _} = eval_app(op1, st)
     assert ns == st
   end
 
@@ -196,7 +239,7 @@ defmodule RuleEngineTest do
       literal(false),
       ])
     st = %{}
-    {:ok, true, ns} = eval_app(op, st)
+    {:ok, true, ns, _} = eval_app(op, st)
     assert ns == st
   end
 
@@ -206,7 +249,7 @@ defmodule RuleEngineTest do
       literal(true),
       ])
     st = %{}
-    {:ok, true, ns} = eval_app(op, st)
+    {:ok, true, ns, _} = eval_app(op, st)
     assert ns == st
   end
 
@@ -216,7 +259,7 @@ defmodule RuleEngineTest do
       literal(false),
       ])
     st = %{}
-    {:ok, false, ns} = eval_app(op1, st)
+    {:ok, false, ns, _} = eval_app(op1, st)
     assert ns == st
   end
 
@@ -226,7 +269,7 @@ defmodule RuleEngineTest do
       literal("ll"),
       ])
     st = %{}
-    {:ok, val, ns} = eval_app(op1, st)
+    {:ok, val, ns, _} = eval_app(op1, st)
     assert ns == st
     assert val == true
   end
@@ -237,7 +280,7 @@ defmodule RuleEngineTest do
       literal("yolo"),
       ])
     st = %{}
-    {:ok, val, ns} = eval_app(op1, st)
+    {:ok, val, ns, _} = eval_app(op1, st)
     assert ns == st
     assert val == false
   end
@@ -301,7 +344,7 @@ defmodule RuleEngineTest do
         ])
       ])
     st = %{}
-    {:ok, val, ns} = eval_app(op, st)
+    {:ok, val, ns, _} = eval_app(op, st)
     assert ns == st
     assert val == nil
   end
@@ -321,7 +364,7 @@ defmodule RuleEngineTest do
     expects = %{
       "good-2" => true
     }
-    {:ok, val, ns} = eval_app(op1, st)
+    {:ok, val, ns, _} = eval_app(op1, st)
     assert ns == expects
     assert val == nil
   end
@@ -346,9 +389,93 @@ defmodule RuleEngineTest do
     expects = %{
       "good-2" => true
     }
-    {:ok, val, ns} = eval_app(op1, st)
+    {:ok, val, ns, _} = eval_app(op1, st)
     assert ns == expects
     assert val == nil
+  end
+
+  test "stack push" do
+    empty = %RuleEngine.Eval.Stack{}
+    vals1 = %{
+      a: 1,
+      b: 2
+    }
+    vals2 = %{
+      a: 3,
+      c: 4
+    }
+    st = empty
+      |> push_stack(:dummy1, vals1)
+      |> push_stack(:dummy2, vals2)
+    assert st == %RuleEngine.Eval.Stack{
+      level: 2,
+      stack: [:dummy2, :dummy1],
+      symbols: %{
+        a: [2, 1],
+        b: [1],
+        c: [2]
+      },
+      values: %{
+        {:a, 1} => 1,
+        {:b, 1} => 2,
+        {:a, 2} => 3,
+        {:c, 2} => 4
+      }
+    }
+  end
+
+  test "stack pop" do
+    stack = %RuleEngine.Eval.Stack{
+      level: 2,
+      stack: [:dummy2, :dummy1],
+      symbols: %{
+        a: [2, 1],
+        b: [1],
+        c: [2]
+      },
+      values: %{
+        {:a, 1} => 1,
+        {:b, 1} => 2,
+        {:a, 2} => 3,
+        {:c, 2} => 4
+      }
+    }
+    expects = %RuleEngine.Eval.Stack{
+      level: 1,
+      stack: [:dummy1],
+      symbols: %{
+        a: [1],
+        b: [1]
+      },
+      values: %{
+        {:a, 1} => 1,
+        {:b, 1} => 2
+      }
+    }
+    assert pop_stack(stack) == expects
+  end
+
+  test "push and pop" do
+    empty = %RuleEngine.Eval.Stack{}
+    vals1 = %{a: 1, b: 2}
+    vals2 = %{a: 3, c: 4}
+    vals3 = %{a: 5}
+
+    st = empty
+      |> push_stack(:dummy1, vals1)
+      |> push_stack(:dummy2, vals2)
+      |> pop_stack()
+      |> push_stack(:dummy3, vals3)
+      |> pop_stack()
+      |> pop_stack()
+
+      expects = %RuleEngine.Eval.Stack{
+        level: 0,
+        stack: [],
+        symbols: %{},
+        values: %{}
+      }
+    assert st == expects
   end
 
 end
