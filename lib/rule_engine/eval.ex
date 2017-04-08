@@ -31,24 +31,28 @@ defmodule RuleEngine.Eval do
   #  err -> {:error, {:internal_error, err}, nil}
   end
 
-  def eval_app(op, state, access \\ %{}, stack \\ %Stack{}) do
-    # IO.puts("eval(#{inspect op}, #{inspect state}, _)")
+  defp eval_app(op, state, access, stack) do
     fun = apply_fun(op, :fun)
     st = stack
       |> advance_stack()
       |> push_stack(fun)
-    res = eval(
-      fun,
-      apply_fun(op, :values),
-      state,
-      access,
-      st
-      )
+    res = eval_op(op, state, access, st)
     case res do
       {:ok, val, st, s} ->
         okay(val, st, pop_stack(s))
       _ -> res
     end
+  end
+
+  def eval_op(op, state, access \\ %{}, stack \\ %Stack{}) do
+    # IO.puts("eval(#{inspect op}, #{inspect state}, _)")
+    eval(
+      apply_fun(op, :fun),
+      apply_fun(op, :values),
+      state,
+      access,
+      stack
+      )
   end
 
   def eval_list(ops, state, access \\ %{}, stack \\ %Stack{}) do
