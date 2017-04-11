@@ -30,7 +30,7 @@ defmodule RuleEngine.Types do
   def symbol(s) when is_atom(s) or is_binary(s), do: mk(:symbol, s)
   def string(s) when is_binary(s), do: mk(:string, s)
   def number(n) when is_number(n), do: mk(:number, n)
-  def function(f, ps \\ []) when is_function(f), do: mk(:function, [f | ps])
+  def function(f) when is_function(f), do: mk(:function, f)
 
   defp mk(ty, val), do: %Token{type: ty, value: val}
 
