@@ -2,82 +2,96 @@ defmodule RuleEngine.Mutable do
   defstruct [
     next_atom: 1,
     atoms: %{},
-    next_env: 1,
-    environments: %{}
+    environment: %{}
   ]
+
   def atom_new(mutable, value) do
-    natom = mutable.next_atom
-    nmutable = %__MODULE__{mutable |
-      next_atom: natom + 1,
-      atoms: %{mutable.atoms | natom => value}
-    }
-    {nmutable, natom}
+    {[natom], nmutable1} = get_and_update_in(mutable, [Lens.key(:next_atom)], fn x ->
+      {x, x + 1}
+    end)
+    nmutable2 = update_in(nmutable1, [Lens.key(:atoms)], fn atoms ->
+      Map.put(atoms, natom, value)
+    end)
+    {nmutable2, natom}
   end
+
   def atom_deref(mutable, atom) do
     {mutable, Map.get(mutable.atoms, atom)}
   end
+
   def atom_reset!(mutable, atom, value) do
     lens = Lens.key(:atoms)
       |> Lens.key(atom)
     nmutable = update_in(mutable, [lens], fn _ -> value end)
     {nmutable, value}
   end
-  def atom_swap!(mutable, atom, fun) do
+
+  def atom_swap!(mutable, atom, fun) when is_function(fun) do
     lens = Lens.key(:atoms)
       |> Lens.key(atom)
-    {value, nmutable} = get_and_update_in(mutable, [lens], fun)
-    {nmutable, value}
+    {value, nmutable} = get_and_update_in(mutable, [lens], fn x ->
+      result = fun.(x)
+      {result, result}
+    end)
+    case value do
+      [] -> {nmutable, {:no_such_atom, atom}}
+      [val] -> {nmutable, {:ok, val}}
+    end
   end
-  def env_new(mutable, outer, binds, exprs) do
-    nenv = mutable.next_env
-    data = Enum.zip(binds, exprs)
-      |> Enum.into(%{})
-    env = %{
-      outer: outer,
-      vals: data
-    }
-    nmutable = %__MODULE__{mutable |
-      next_env: nenv + 1,
-      environments: %{mutable.environments | nenv => env}
-    }
-    {nmutable, nenv}
+
+  def env_new(mutable, outer, data) do
+    lens = Lens.key(:environment)
+    nmutable = update_in(mutable, [lens], fn _ ->
+      %{
+        outer: outer,
+        vals: data
+      }
+    end)
+    nmutable
   end
-  def env_set(mutable, env, key, value) do
-    lens = Lens.key(:environments)
-      |> Lens.key(env)
+
+  def env_set(mutable, key, value) do
+    lens = Lens.key(:environment)
+      |> Lens.key(:vals)
     nmutable = update_in(mutable, [lens], fn m ->
       Map.put(m, key, value)
     end)
-    {nmutable, value}
+    nmutable
   end
-  def env_merge(mutable, env, values) do
-    lens = Lens.key(:environments)
-      |> Lens.key(env)
+
+  def env_merge(mutable, %{vals: values}) do
+    lens = Lens.key(:environment)
+      |> Lens.key(:vals)
     nmutable = update_in(mutable, [lens], fn m ->
       Map.merge(m, values)
     end)
-    {nmutable, nil}
+    nmutable
   end
-  def env_lens(env), do: Lens.key(:environments) |> Lens.key(env)
-  def env_retrieve_key(mutable, env, key) do
-    lens = env_lens(env)
-      |> Lens.key(:vals)
-      |> Lens.key(key)
-    case get_in(mutable, [lens]) do
-      [] -> {mutable, :not_found}
-      [head | _] -> {mutable, {:ok, head}}
+
+  def env_lookup(mutable, key) do
+    env_get(mutable.environment, key)
+  end
+
+  def env_retrieve_key(environment, key) do
+    lens = Lens.key(:vals)
+    case get_in(environment, [lens]) do
+      [] -> :not_found
+      [vals] ->
+        case Map.get(vals, key, :not_found) do
+          :not_found -> :not_found
+          res -> {:ok, res}
+        end
     end
   end
-  def env_get(mutable, env, key) do
-    parent = env_lens(env)
-      |> Lens.key(:outer)
-    case env_retrieve_key(mutable, env, key) do
-      {nmut, :not_found} ->
-        case get_in(mutable, [parent]) do
-          [outer | _] -> env_get(nmut, outer, key)
-          [] -> {nmut, :not_found}
+  
+  def env_get(environment, key) do
+    case env_retrieve_key(environment, key) do
+      :not_found ->
+        case environment.outer do
+          nil -> :not_found
+          parent -> env_get(parent, key)
         end
-      {nmut, {:ok, val}} -> {nmut, {:ok, val}}
+      {:ok, val} -> {:ok, val}
     end
   end
 end

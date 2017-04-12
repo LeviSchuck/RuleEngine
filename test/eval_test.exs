@@ -1,4 +1,4 @@
-defmodule RuleEngineTest do
+defmodule RuleEngineEvalTest do
   use ExUnit.Case
   doctest RuleEngine
   import RuleEngine.Types
