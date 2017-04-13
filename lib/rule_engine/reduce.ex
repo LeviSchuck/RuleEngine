@@ -9,7 +9,15 @@ defmodule RuleEngine.Reduce do
     end
   end
   def reduce(%Token{type: :symbol, macro: false} = tok) do
-    resolve_symbol(tok)
+    default = State.m do
+      return tok
+    end
+    case tok.value do
+      nil -> default
+      true -> default
+      false -> default
+      _ -> resolve_symbol(tok)
+    end
   end
 
   def reduce(%Token{} = tok) do
@@ -35,7 +43,7 @@ defmodule RuleEngine.Reduce do
         %Token{type: :symbol, value: true} -> reduce(true_ast)
         %Token{type: :symbol, value: false} -> reduce(false_ast)
         %Token{type: :symbol, value: nil} -> reduce(false_ast)
-        _ -> throw :condition_not_boolean
+        _ -> throw {:condition_not_boolean, result}
       end
     end
   end

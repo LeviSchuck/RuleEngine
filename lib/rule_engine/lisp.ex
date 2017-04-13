@@ -154,5 +154,6 @@ defmodule RuleEngine.LISP do
   catch
     {:not_a_function, tok} -> {:error, {:not_a_function, tok}}
     {:no_symbol_found, tok} -> {:error, {:no_symbol_found, tok}}
+    {:condition_not_boolean, tok} -> {:error, {:condition_not_boolean, tok}}
   end
 end
