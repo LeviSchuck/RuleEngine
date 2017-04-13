@@ -60,7 +60,7 @@ defmodule RuleEngine.LISP do
         end)
     end
     def parse_symbol() do
-      symbol_regex = ~r/[a-z_0-9!?*<>=!#^]+/
+      symbol_regex = ~r/[a-z_0-9!?*<>=!#^+\-]+/
       word_of(symbol_regex)
         |> tol()
         |> pipe(fn [sy] ->

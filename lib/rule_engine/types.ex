@@ -25,13 +25,18 @@ defmodule RuleEngine.Types do
   def function?(%Token{type: :function}), do: true
   def function?(_), do: false
 
+  def macro?(%Token{type: :function, macro: true}), do: true
+  def macro?(_), do: false
+
   def map(%{} = m), do: mk(:map, m)
   def list(l) when is_list(l), do: mk(:list, l)
   def symbol(s) when is_atom(s) or is_binary(s), do: mk(:symbol, s)
   def string(s) when is_binary(s), do: mk(:string, s)
   def number(n) when is_number(n), do: mk(:number, n)
   def function(f) when is_function(f), do: mk(:function, f)
+  def macro(f) when is_function(f), do: mkm(f)
 
   defp mk(ty, val), do: %Token{type: ty, value: val}
+  defp mkm(val), do: %Token{type: :function, macro: true, value: val}
 
 end
