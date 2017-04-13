@@ -8,6 +8,9 @@ defmodule RuleEngine.Reduce do
       reduce_list(tok.value)
     end
   end
+  def reduce(%Token{type: :symbol, macro: false} = tok) do
+    resolve_symbol(tok)
+  end
 
   def reduce(%Token{} = tok) do
     State.m do
