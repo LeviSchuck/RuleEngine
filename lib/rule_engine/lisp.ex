@@ -18,6 +18,9 @@ defmodule RuleEngine.LISP do
       {:error, {err, val}} ->
         IO.puts("Error: #{inspect err}: #{print(val)}")
         loop(mutable)
+      {:error, desc} when is_binary(desc) ->
+        IO.puts("Error: #{desc}")
+        loop(mutable)
       {:end} -> nil
       {:ignore} -> loop(mutable)
       what ->
@@ -155,5 +158,9 @@ defmodule RuleEngine.LISP do
     {:not_a_function, tok} -> {:error, {:not_a_function, tok}}
     {:no_symbol_found, tok} -> {:error, {:no_symbol_found, tok}}
     {:condition_not_boolean, tok} -> {:error, {:condition_not_boolean, tok}}
+    {:arity_mismatch, expected, actual} -> {:error, "Expected #{expected} arguments, but got #{actual} arguments"}
+    {:type_mismatch, :same, ref_ty, t} -> {:error, "Expected the same type for some args as prior args, namely #{ref_ty} instead of #{t}"}
+    {:type_mismatch, ref_ty, t} -> {:error, "Expected #{ref_ty} as argument type, but got #{t}"}
+    {:type_mismatch, ref_ty, t, val} -> {:error, "Expected #{ref_ty} as argument type, but got #{t}: #{print(val)}"}
   end
 end

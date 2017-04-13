@@ -16,8 +16,8 @@ defmodule RuleEngine.Bootstrap do
         ">=" => mkfun(fn x, y -> x >= y end, [:any, :any]),
         "+" => plusfun(),
         "-" => minusfun(),
-        "nil?" => nil_check(),
-        "boolean?" => bool_check(),
+        "nil?" => simple_fun(&nil?/1),
+        "boolean?" => simple_fun(&boolean?/1),
         "symbol?" => simple_fun(&symbol?/1),
         "list?" => simple_fun(&list?/1),
         "map?" => simple_fun(&map?/1),
@@ -169,30 +169,6 @@ defmodule RuleEngine.Bootstrap do
     end
     wrap_state(lambda)
   end
-  defp bool_check() do
-    simple_fun(fn x ->
-      res = case x.type do
-        :symbol ->
-          case x.value do
-            true -> true
-            false -> true
-            nil -> true
-            _ -> false
-          end
-        _ -> false
-      end
-      symbol(res)
-    end)
-  end
-  defp nil_check() do
-    simple_fun(fn x ->
-      res = case x.type do
-        :symbol -> is_nil(x.value)
-        _ -> false
-      end
-      symbol(res)
-    end)
-  end
   def do_fun() do
     simple_macro(fn ast ->
       State.m do
@@ -222,7 +198,8 @@ defmodule RuleEngine.Bootstrap do
               %Token{type: :symbol, value: true} -> Reduce.reduce(true_ast)
               %Token{type: :symbol, value: false} -> Reduce.reduce(false_ast)
               %Token{type: :symbol, value: nil} -> Reduce.reduce(false_ast)
-              _ -> throw {:condition_not_boolean, result}
+              %Token{} -> throw err_type(:boolean, result.type, result)
+              x -> throw err_type(:boolean, :unknown, x)
             end
           end
         _ -> throw err_arity(3, length(ast))
@@ -249,12 +226,15 @@ defmodule RuleEngine.Bootstrap do
     end
   end
   def err_arity(expected, actual) do
-    {:arity_mismatch, "Expected #{expected} arguments, got #{actual}"}
+    {:arity_mismatch, expected, actual}
   end
   def err_type(:same, ref_ty, t) do
-    {:type_mismatch, "Expected the same type for some args as prior args, namely #{ref_ty} instead of #{t}"}
+    {:type_mismatch, :same, ref_ty, t}
+  end
+  def err_type(ref_ty, t, val) do
+    {:type_mismatch, ref_ty, t, val}
   end
   def err_type(ref_ty, t) do
-    {:type_mismatch, "Expected #{ref_ty} as argument type, but got #{t}"}
+    {:type_mismatch, ref_ty, t}
   end
 end
