@@ -1,11 +1,11 @@
 defmodule RuleEngine.LISP do
-  alias RuleEngine.Mutable
+  alias RuleEngine.Bootstrap
   alias RuleEngine.Types
   alias RuleEngine.Types.Token
   require Monad.State, as: State
 
   def main() do
-    loop(%Mutable{})
+    loop(Bootstrap.bootstrap_mutable())
   end
   defp loop(mutable) do
     IO.write(:stdio, "user> ")
@@ -60,7 +60,7 @@ defmodule RuleEngine.LISP do
         end)
     end
     def parse_symbol() do
-      symbol_regex = ~r/[a-z_0-9!?*]+/
+      symbol_regex = ~r/[a-z_0-9!?*<>=!#^]+/
       word_of(symbol_regex)
         |> tol()
         |> pipe(fn [sy] ->
@@ -153,5 +153,6 @@ defmodule RuleEngine.LISP do
     {:ok, res, nmutable}
   catch
     {:not_a_function, tok} -> {:error, {:not_a_function, tok}}
+    {:no_symbol_found, tok} -> {:error, {:no_symbol_found, tok}}
   end
 end
