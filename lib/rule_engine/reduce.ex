@@ -71,7 +71,7 @@ defmodule RuleEngine.Reduce do
     end
   end
 
-  def add_reduction() do
+  def add_reduction do
     fn state ->
       {nil, Mutable.reductions_inc(state)}
     end

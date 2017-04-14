@@ -8,9 +8,12 @@ defmodule RuleEngine.Mutable do
   ]
 
   def atom_new(mutable, value) do
-    {[natom], nmutable1} = get_and_update_in(mutable, [Lens.key(:next_atom)], fn x ->
-      {x, x + 1}
-    end)
+    {[natom], nmutable1} = get_and_update_in(
+      mutable,
+      [Lens.key(:next_atom)],
+      fn x ->
+        {x, x + 1}
+      end)
     nmutable2 = update_in(nmutable1, [Lens.key(:atoms)], fn atoms ->
       Map.put(atoms, natom, value)
     end)

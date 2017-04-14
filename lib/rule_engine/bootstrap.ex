@@ -4,7 +4,7 @@ defmodule RuleEngine.Bootstrap do
   import RuleEngine.Types
   alias RuleEngine.Types.Token
 
-  def bootstrap_environment() do
+  def bootstrap_environment do
     %{
       outer: nil,
       vals: %{
@@ -20,8 +20,8 @@ defmodule RuleEngine.Bootstrap do
         "||" => mkfun(fn x, y -> x || y end, [:boolean, :boolean]),
         "++" => mkfun(fn x, y -> x <> y end, [:string, :string]),
         # Folding Combinatoral operations
-        "+" => plusfun(),
-        "-" => minusfun(),
+        "+" => plus_fun(),
+        "-" => minus_fun(),
         "and" => and_fun(),
         "or" => or_fun(),
         # Types
@@ -60,7 +60,7 @@ defmodule RuleEngine.Bootstrap do
     }
   end
 
-  def bootstrap_mutable() do
+  def bootstrap_mutable do
     %Mutable{
       environment: bootstrap_environment()
     }
@@ -110,30 +110,33 @@ defmodule RuleEngine.Bootstrap do
       cond do
         ltypes == largs ->
           argtys = Enum.zip(types, args)
-          type_check = Enum.reduce_while(argtys, {%{}, :ok}, fn {ty, %Token{type: t, } = tok}, {same, :ok} ->
-            case ty do
-              {:same, label} ->
-                case Map.get(same, label, :not_found) do
-                  :not_found -> {:cont, {Map.put(same, label, t), :ok}}
-                  ref_ty ->
-                    cond do
-                      ref_ty == t -> {:cont, {same, :ok}}
-                      true -> {:halt, {:error, err_type(:same, ref_ty, t)}}
-                    end
-                end
-              :any -> {:cont, {same, :ok}}
-              :boolean ->
-                cond do
-                  boolean?(tok) -> {:cont, {same, :ok}}
-                  true -> {:halt, {:error, err_type(:boolean, t)}}
-                end
-              other ->
-                cond do
-                  other == t -> {:cont, {same, :ok}}
-                  true -> {:halt, {:error, err_type(other, t)}}
-                end
-            end
-          end)
+          type_check = Enum.reduce_while(
+            argtys,
+            {%{}, :ok},
+            fn {ty, %Token{type: t} = tok}, {same, :ok} ->
+              case ty do
+                {:same, label} ->
+                  case Map.get(same, label, :not_found) do
+                    :not_found -> {:cont, {Map.put(same, label, t), :ok}}
+                    ref_ty ->
+                      cond do
+                        ref_ty == t -> {:cont, {same, :ok}}
+                        true -> {:halt, {:error, err_type(:same, ref_ty, t)}}
+                      end
+                  end
+                :any -> {:cont, {same, :ok}}
+                :boolean ->
+                  cond do
+                    boolean?(tok) -> {:cont, {same, :ok}}
+                    true -> {:halt, {:error, err_type(:boolean, t)}}
+                  end
+                other ->
+                  cond do
+                    other == t -> {:cont, {same, :ok}}
+                    true -> {:halt, {:error, err_type(other, t)}}
+                  end
+              end
+            end)
           case type_check do
             {_, :ok} ->
               case conversion do
@@ -179,7 +182,7 @@ defmodule RuleEngine.Bootstrap do
     :ok
   end
 
-  defp minusfun() do
+  defp minus_fun do
     lambda = fn args ->
       type_check = all_type_check(args, :number)
       case type_check do
@@ -197,7 +200,7 @@ defmodule RuleEngine.Bootstrap do
     end
     wrap_state(lambda)
   end
-  defp plusfun() do
+  defp plus_fun do
     lambda = fn args ->
       type_check = all_type_check(args, :number)
       case type_check do
@@ -211,35 +214,41 @@ defmodule RuleEngine.Bootstrap do
     wrap_state(lambda)
   end
 
-  defp and_fun() do
+  defp and_fun do
     simple_macro(fn ast ->
       fn state ->
-        {res, state_final} = Enum.reduce_while(ast, {true, state}, fn v, {_, s} ->
-          {res, state2} = Reduce.reduce(v).(s)
-          case res do
-            %Token{type: :symbol, value: nil} -> {:halt, {false, state2}}
-            %Token{type: :symbol, value: false} -> {:halt, {false, state2}}
-            %Token{type: :symbol, value: true} -> {:cont, {true, state2}}
-            _ -> throw err_type(:boolean, v.type, v)
-          end
-        end)
+        {res, state_final} = Enum.reduce_while(
+          ast,
+          {true, state},
+          fn v, {_, s} ->
+            {res, state2} = Reduce.reduce(v).(s)
+            case res do
+              %Token{type: :symbol, value: nil} -> {:halt, {false, state2}}
+              %Token{type: :symbol, value: false} -> {:halt, {false, state2}}
+              %Token{type: :symbol, value: true} -> {:cont, {true, state2}}
+              _ -> throw err_type(:boolean, v.type, v)
+            end
+          end)
         {symbol(res), state_final}
       end
     end)
   end
 
-  defp or_fun() do
+  defp or_fun do
     simple_macro(fn ast ->
       fn state ->
-        {res, state_final} = Enum.reduce_while(ast, {false, state}, fn v, {_, s} ->
-          {res, state2} = Reduce.reduce(v).(s)
-          case res do
-            %Token{type: :symbol, value: nil} -> {:cont, {false, state2}}
-            %Token{type: :symbol, value: false} -> {:cont, {false, state2}}
-            %Token{type: :symbol, value: true} -> {:halt, {true, state2}}
-            _ -> throw err_type(:boolean, v.type, v)
-          end
-        end)
+        {res, state_final} = Enum.reduce_while(
+          ast,
+          {false, state},
+          fn v, {_, s} ->
+            {res, state2} = Reduce.reduce(v).(s)
+            case res do
+              %Token{type: :symbol, value: nil} -> {:cont, {false, state2}}
+              %Token{type: :symbol, value: false} -> {:cont, {false, state2}}
+              %Token{type: :symbol, value: true} -> {:halt, {true, state2}}
+              _ -> throw err_type(:boolean, v.type, v)
+            end
+          end)
         {symbol(res), state_final}
       end
     end)
@@ -272,12 +281,12 @@ defmodule RuleEngine.Bootstrap do
   end
 
   # Macros
-  def do_fun() do
+  def do_fun do
     simple_macro(fn ast ->
       lastReduce(ast)
     end)
   end
-  def quote_fun() do
+  def quote_fun do
     simple_macro(fn ast ->
       case ast do
         [single] ->
@@ -288,17 +297,21 @@ defmodule RuleEngine.Bootstrap do
       end
     end)
   end
-  def if_fun() do
+  def if_fun do
     simple_macro(fn ast ->
       case ast do
         [condition, true_ast, false_ast] ->
           fn state ->
             {result, state2} = Reduce.reduce(condition).(state)
             case result do
-              %Token{type: :symbol, value: true} -> Reduce.reduce(true_ast).(state2)
-              %Token{type: :symbol, value: false} -> Reduce.reduce(false_ast).(state2)
-              %Token{type: :symbol, value: nil} -> Reduce.reduce(false_ast).(state2)
-              %Token{} -> throw err_type(:boolean, result.type, result)
+              %Token{type: :symbol, value: true} ->
+                Reduce.reduce(true_ast).(state2)
+              %Token{type: :symbol, value: false} ->
+                Reduce.reduce(false_ast).(state2)
+              %Token{type: :symbol, value: nil} ->
+                Reduce.reduce(false_ast).(state2)
+              %Token{} ->
+                throw err_type(:boolean, result.type, result)
               x -> throw err_type(:boolean, :unknown, x)
             end
           end
@@ -306,7 +319,7 @@ defmodule RuleEngine.Bootstrap do
       end
     end)
   end
-  def set_fun() do
+  def set_fun do
     simple_macro(fn ast ->
       case ast do
         [sy, val] ->
@@ -324,7 +337,7 @@ defmodule RuleEngine.Bootstrap do
       end
     end)
   end
-  def let_fun() do
+  def let_fun do
     simple_macro(fn ast ->
       case ast do
         [bindings, body] ->
@@ -344,7 +357,7 @@ defmodule RuleEngine.Bootstrap do
       end
     end)
   end
-  def lambda_fun() do
+  def lambda_fun do
     simple_macro(fn ast ->
       case ast do
         [bindings, body] ->
@@ -355,13 +368,16 @@ defmodule RuleEngine.Bootstrap do
           fn state ->
             fun = function(fn args ->
               fn fun_state ->
-                {bound, fun_state2} = Enum.map_reduce(bindings.value, fun_state, fn binding, st ->
-                  case binding do
-                    %Token{type: :list} -> Reduce.reduce(binding).(st)
-                    %Token{type: :symbol} -> {binding, st}
-                    _ -> throw err_type(:list, bindings.type, bindings)
-                  end
-                end)
+                {bound, fun_state2} = Enum.map_reduce(
+                  bindings.value,
+                  fun_state,
+                  fn binding, st ->
+                    case binding do
+                      %Token{type: :list} -> Reduce.reduce(binding).(st)
+                      %Token{type: :symbol} -> {binding, st}
+                      _ -> throw err_type(:list, bindings.type, bindings)
+                    end
+                  end)
                 Enum.each(bound, fn binding ->
                   case binding do
                     %Token{type: :symbol} -> nil
@@ -369,10 +385,13 @@ defmodule RuleEngine.Bootstrap do
                   end
                 end)
                 matched = zip_bias_left(bound, args)
-                {vals, fun_state3} = Enum.reduce(matched, {%{}, fun_state2}, fn {k,v}, {vs, st} ->
-                  {res, post_state} = Reduce.reduce(v).(st)
-                  {Map.put(vs, k.value, res), post_state}
-                end)
+                {vals, fun_state3} = Enum.reduce(
+                  matched,
+                  {%{}, fun_state2},
+                  fn {k, v}, {vs, st} ->
+                    {res, post_state} = Reduce.reduce(v).(st)
+                    {Map.put(vs, k.value, res), post_state}
+                  end)
                 # Finally, have the outside say it has placed the environment
                 last = fn final_state ->
                   final_state2 = Mutable.env_new(final_state, vals)
@@ -388,7 +407,7 @@ defmodule RuleEngine.Bootstrap do
       end
     end)
   end
-  def def_fun() do
+  def def_fun do
     simple_macro(fn ast ->
       case ast do
         [identifier, body] ->
@@ -435,13 +454,13 @@ defmodule RuleEngine.Bootstrap do
       {val, state}
     end
   end
-  defp set_all([_], _), do: throw err_arity(2,1)
+  defp set_all([_], _), do: throw err_arity(2, 1)
   defp set_all([k, v | rest], val) do
     fn state ->
       {k_ref, state2} = get_key(k).(state)
       {v_val, state3} = Reduce.reduce(v).(state2)
       next_val = Map.put(val, k_ref.value, v_val)
-      set_all(rest,next_val).(state3)
+      set_all(rest, next_val).(state3)
     end
   end
 

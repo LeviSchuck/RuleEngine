@@ -3,7 +3,8 @@ defmodule RuleEngine.LISP do
   alias RuleEngine.Mutable
   alias RuleEngine.Types
   alias RuleEngine.Types.Token
-  def mk_mut() do
+  alias RuleEngine.Reduce
+  def mk_mut do
     Bootstrap.bootstrap_mutable()
       |> Mutable.env_new(%{
           "debug_atom" =>
@@ -32,7 +33,7 @@ defmodule RuleEngine.LISP do
             end, [])
         })
   end
-  def main() do
+  def main do
     loop(mk_mut())
   end
   defp loop(mutable) do
@@ -82,7 +83,7 @@ defmodule RuleEngine.LISP do
     end
     defp tol(x), do: [x]
 
-    def parse_text() do
+    def parse_text do
       text_regex = ~r/([^\\"]|\\(\\|"))*/
       between(char("\""), word_of(text_regex), char("\""))
         |> tol()
@@ -90,7 +91,7 @@ defmodule RuleEngine.LISP do
           Types.string(text)
         end)
     end
-    def parse_symbol() do
+    def parse_symbol do
       symbol_regex = ~r/[a-z_0-9!?*<>=\!\#\^\+\-\|\&]+/
       word_of(symbol_regex)
         |> tol()
@@ -98,32 +99,33 @@ defmodule RuleEngine.LISP do
           Types.symbol(sy)
         end)
     end
-    def parse_number() do
+    def parse_number do
       either(float(), integer())
-      |> tol()
-      |> pipe(fn [num] ->
-        Types.number(num)
-      end)
+        |> tol()
+        |> pipe(fn [num] ->
+          Types.number(num)
+        end)
     end
-    def parse_list() do
+    def parse_list do
       between(char("("), many(lazy(fn -> parse_value() end)), char(")"))
         |> tol()
         |> pipe(fn [list] ->
           Types.list(list)
         end)
     end
-    def parse_map() do
+    def parse_map do
       between(string("%{"), many(lazy(fn ->
         sequence([parse_value(), option(string("=>")), parse_value(), option(char(","))])
       end))
       |> tol()
       |> pipe(fn [xs] ->
-        Enum.map(xs, fn [k, _, v, _] -> {k, v} end)
+        xs
+          |> Enum.map(fn [k, _, v, _] -> {k, v} end)
           |> Enum.into(%{})
           |> Types.dict()
       end), char("}"))
     end
-    def parse_value() do
+    def parse_value do
       between(option(spaces()), choice([
         parse_map(),
         parse_list(),
@@ -132,8 +134,8 @@ defmodule RuleEngine.LISP do
         parse_symbol()
         ]), option(spaces()))
     end
-    def parse_root() do
-      parse_value()
+    def parse_root do
+      parse_value
     end
   end
 
@@ -142,7 +144,7 @@ defmodule RuleEngine.LISP do
       "" -> {:ignore}
       "end!" -> {:end}
       command ->
-        case Combine.parse(command,Parser.parse_root()) do
+        case Combine.parse(command, Parser.parse_root()) do
           [x] -> {:ok, x}
           {:error, expected} -> {:error, {:parse_error, expected}}
           res -> res
@@ -150,7 +152,7 @@ defmodule RuleEngine.LISP do
     end
   end
   def print(%Token{type: :list} = tok) do
-    ["(", Enum.join(Enum.map(tok.value, &print/1)," ") ,")"]
+    ["(", Enum.join(Enum.map(tok.value, &print/1), " "), ")"]
   end
   def print(%Token{type: :number} = tok) do
     inspect(tok.value)
@@ -186,16 +188,27 @@ defmodule RuleEngine.LISP do
   end
 
   def eval(ast, mutable) do
-    {res, nmutable} = RuleEngine.Reduce.reduce(ast).(mutable)
+    {res, nmutable} = Reduce.reduce(ast).(mutable)
     {:ok, res, nmutable}
   catch
-    {:not_a_function, tok} -> {:error, {:not_a_function, tok}}
-    {:no_symbol_found, tok} -> {:error, {:no_symbol_found, tok}}
-    {:condition_not_boolean, tok} -> {:error, {:condition_not_boolean, tok}}
-    {:arity_mismatch, expected, actual} -> {:error, "Expected #{expected} arguments, but got #{actual} arguments"}
-    {:type_mismatch, :same, ref_ty, t} -> {:error, "Expected the same type for some args as prior args, namely #{ref_ty} instead of #{t}"}
-    {:type_mismatch, ref_ty, t} -> {:error, "Expected #{ref_ty} as argument type, but got #{t}"}
-    {:type_mismatch, ref_ty, t, val} -> {:error, "Expected #{ref_ty} as argument type, but got #{t}: #{print(val)}"}
-    {:no_atom_found, atom_ref} -> {:error, {:no_atom_found, atom_ref}}
+    {:not_a_function, tok} ->
+      {:error, {:not_a_function, tok}}
+    {:no_symbol_found, tok} ->
+      {:error, {:no_symbol_found, tok}}
+    {:condition_not_boolean, tok} ->
+      {:error, {:condition_not_boolean, tok}}
+    {:arity_mismatch, expected, actual} ->
+      {:error, "Expected #{expected} arguments, but got #{actual} arguments"}
+    {:type_mismatch, :same, ref_ty, t} ->
+      {:error, """
+      Expected the same type for some args as prior args,
+      namely #{ref_ty} instead of #{t}
+      """}
+    {:type_mismatch, ref_ty, t} ->
+      {:error, "Expected #{ref_ty} as argument type, but got #{t}"}
+    {:type_mismatch, ref_ty, t, val} ->
+      {:error, "Expected #{ref_ty} as argument type, but got #{t}: #{print(val)}"}
+    {:no_atom_found, atom_ref} ->
+      {:error, {:no_atom_found, atom_ref}}
   end
 end
