@@ -67,8 +67,7 @@ defmodule RuleEngine.Reduce do
         {:ok, val} -> val
         :not_found -> throw {:no_symbol_found, sy_tok}
       end
-      {_, state2} = add_reduction().(state)
-      {result, state2}
+      {result, state}
     end
   end
 

@@ -24,6 +24,12 @@ defmodule RuleEngine.LISP do
                 {Types.map(state.atoms), state}
               end
             end, []),
+          "debug_reductions" =>
+            Bootstrap.state_fun(fn ->
+              fn state ->
+                {Types.number(state.reductions), state}
+              end
+            end, [])
         })
   end
   def main() do
