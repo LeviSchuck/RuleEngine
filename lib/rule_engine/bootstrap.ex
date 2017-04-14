@@ -3,7 +3,7 @@ defmodule RuleEngine.Bootstrap do
   alias RuleEngine.Reduce
   import RuleEngine.Types
   alias RuleEngine.Types.Token
-  require Monad.State, as: State
+
   def bootstrap_environment() do
     %{
       outer: nil,
@@ -28,7 +28,21 @@ defmodule RuleEngine.Bootstrap do
         "do" => do_fun(),
         "quote" => quote_fun(),
         "if" => if_fun(),
-      }
+        "true" => symbol(true),
+        true => symbol(true),
+        "false" => symbol(false),
+        false => symbol(false),
+        "nil" => symbol(nil),
+        nil => symbol(nil),
+        "atom" => state_fun(&make_atom/1, [:any]),
+        "atom?" => simple_fun(&atom?/1),
+        "deref" => state_fun(&deref_atom/1, [:atom]),
+        "reset!" => state_fun(&reset_atom/2, [:atom, :any]),
+        # "swap!" => mkfun(???, [:atom, :function])
+        "set!" => set_fun(),
+        "let" => let_fun(),
+      },
+      id: 0
     }
   end
 
@@ -55,7 +69,7 @@ defmodule RuleEngine.Bootstrap do
       |> list()
   end
   def convert(res) when is_function(res), do: function(res)
-  def convert(res), do: {:error, {:cannot_convert, res}}
+  def convert(res), do: hack(res)
 
   def simple_fun(fun) do
     lambda = fn args ->
@@ -72,15 +86,11 @@ defmodule RuleEngine.Bootstrap do
 
   def simple_macro(fun) do
     macro(fn args ->
-      State.m do
-        res <- fun.(args)
-        return res
-      end
+      fun.(args)
     end)
   end
-
-  def mkfun(fun, types) do
-    lambda = fn args ->
+  def mk_core_fun(fun, types, conversion) do
+    fn args ->
       ltypes = length(types)
       largs = length(args)
       cond do
@@ -106,14 +116,25 @@ defmodule RuleEngine.Bootstrap do
             end
           end)
           case type_check do
-            {_, :ok} -> exec_fun(fun, args)
+            {_, :ok} ->
+              case conversion do
+                :convert -> exec_fun(fun, args)
+                :naked -> apply(fun, args)
+              end
             {:error, err} -> {:error, err}
           end
         true -> {:error, err_arity(ltypes, largs)}
       end
     end
+  end
+  def mkfun(fun, types) do
+    lambda = mk_core_fun(fun, types, :convert)
     wrap_state(lambda)
-  end 
+  end
+  def state_fun(fun, types) do
+    lambda = mk_core_fun(fun, types, :naked)
+    function(lambda)
+  end
   defp exec_fun(fun, typed_args) do
     args = Enum.map(typed_args, fn %Token{value: v} ->
       v
@@ -123,8 +144,8 @@ defmodule RuleEngine.Bootstrap do
   end
   defp wrap_state(lambda) do
     function(fn args ->
-      State.m do
-        return lambda.(args)
+      fn state ->
+        {lambda.(args), state}
       end
     end)
   end
@@ -169,20 +190,19 @@ defmodule RuleEngine.Bootstrap do
     end
     wrap_state(lambda)
   end
+
+  # Macros
   def do_fun() do
     simple_macro(fn ast ->
-      State.m do
-        res <- lastReduce(ast)
-        return res
-      end
+      lastReduce(ast)
     end)
   end
   def quote_fun() do
     simple_macro(fn ast ->
       case ast do
         [single] ->
-          State.m do
-            return single
+          fn state ->
+            {single, state}
           end
         _ -> throw err_arity(1, length(ast))
       end
@@ -192,12 +212,12 @@ defmodule RuleEngine.Bootstrap do
     simple_macro(fn ast ->
       case ast do
         [condition, true_ast, false_ast] ->
-          State.m do
-            result <- Reduce.reduce(condition)
+          fn state ->
+            {result, state2} = Reduce.reduce(condition).(state)
             case result do
-              %Token{type: :symbol, value: true} -> Reduce.reduce(true_ast)
-              %Token{type: :symbol, value: false} -> Reduce.reduce(false_ast)
-              %Token{type: :symbol, value: nil} -> Reduce.reduce(false_ast)
+              %Token{type: :symbol, value: true} -> Reduce.reduce(true_ast).(state2)
+              %Token{type: :symbol, value: false} -> Reduce.reduce(false_ast).(state2)
+              %Token{type: :symbol, value: nil} -> Reduce.reduce(false_ast).(state2)
               %Token{} -> throw err_type(:boolean, result.type, result)
               x -> throw err_type(:boolean, :unknown, x)
             end
@@ -206,25 +226,118 @@ defmodule RuleEngine.Bootstrap do
       end
     end)
   end
+  def set_fun() do
+    simple_macro(fn ast ->
+      case ast do
+        [sy, val] ->
+          fn state ->
+            {sy_ref, state2} = Reduce.reduce(sy).(state)
+            case sy_ref do
+              %Token{type: :symbol} ->
+                {sy_val, state3} = Reduce.reduce(val).(state2)
+                state4 = Mutable.env_set(state3, sy_ref.value, sy_val)
+                {sy_val, state4}
+              _ -> throw err_type(:symbol, sy_ref.type, sy_ref)
+            end
+          end
+        _ -> throw err_arity(2, length(ast))
+      end
+    end)
+  end
+  def let_fun() do
+    simple_macro(fn ast ->
+      case ast do
+        [bindings, body] ->
+          case bindings do
+            %Token{type: :list} ->
+              fn state ->
+                {vals, state2} = set_all(bindings.value, %{}).(state)
+                pre_env = Mutable.env_ref(state2)
+                state3 = Mutable.env_new(state2, vals)
+                {body_result, state4} = Reduce.reduce(body).(state3)
+                state5 = Mutable.env_override(state4, pre_env)
+                {body_result, state5}
+              end
+            _ -> throw err_type(:list, bindings.type, bindings)
+          end
+        _ -> throw err_arity(2, length(ast))
+      end
+    end)
+  end
+
+  # Helpers
 
   defp lastReduce([]) do
-    State.m do
-      return nil
+    fn state ->
+      {nil, state}
     end
   end
   defp lastReduce([head]) do
-    State.m do
-      v <- Reduce.reduce(head)
-      return v
-    end
+    Reduce.reduce(head)
   end
   defp lastReduce([head | rest]) do
-    State.m do
-      _ <- Reduce.reduce(head)
-      res <- lastReduce(rest)
-      return res
+    fn state ->
+      {_, state2} = Reduce.reduce(head).(state)
+      lastReduce(rest).(state2)
     end
   end
+
+  defp set_all([], val) do
+    fn state ->
+      {val, state}
+    end
+  end
+  defp set_all([_], _), do: throw err_arity(2,1)
+  defp set_all([k, v | rest], val) do
+    fn state ->
+      {k_ref, state2} = get_key(k).(state)
+      {v_val, state3} = Reduce.reduce(v).(state2)
+      next_val = Map.put(val, k_ref.value, v_val)
+      set_all(rest,next_val).(state3)
+    end
+  end
+
+  defp get_key(k) do
+    case k do
+      %Token{type: :symbol} ->
+        fn state ->
+          {k, state}
+        end
+      _ ->
+        fn state ->
+          {k_val, state2} = Reduce.reduce(k).(state)
+          case k_val do
+            %Token{type: :symbol} -> {k_val, state2}
+            _ -> throw err_type(:symbol, k_val.type, k_val)
+          end
+        end
+    end
+  end
+
+  defp make_atom(value) do
+    fn state ->
+      {state2, atom_ref} = Mutable.atom_new(state, value)
+      {atom(atom_ref), state2}
+    end
+  end
+
+  defp deref_atom(atom) do
+    atom_ref = Map.get(atom, :value, atom)
+    fn state ->
+      {state2, atom_val} = Mutable.atom_deref(state, atom_ref)
+      {atom_val, state2}
+    end
+  end
+
+  defp reset_atom(atom, atom_value) do
+    atom_ref = atom.value
+    fn state ->
+      {state2, rvalue} = Mutable.atom_reset!(state, atom_ref, atom_value)
+      {rvalue, state2}
+    end
+  end
+
+  # Errors
   def err_arity(expected, actual) do
     {:arity_mismatch, expected, actual}
   end

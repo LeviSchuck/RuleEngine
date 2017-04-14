@@ -33,8 +33,7 @@ defmodule RuleEngine.Mixfile do
       {:dialyxir, "~> 0.5", only: [:dev], runtime: false},
       {:ex_doc, "~> 0.14", only: [:dev], runtime: false},
       {:combine, "~> 0.7"},
-      {:monad, "~> 1.0"},
-      {:lens, "~> 0.3.1"}
+      {:lens, "~> 0.3.1"},
     ]
   end
 end

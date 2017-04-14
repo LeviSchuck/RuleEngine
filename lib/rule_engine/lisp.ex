@@ -1,11 +1,33 @@
 defmodule RuleEngine.LISP do
   alias RuleEngine.Bootstrap
+  alias RuleEngine.Mutable
   alias RuleEngine.Types
   alias RuleEngine.Types.Token
-  require Monad.State, as: State
-
+  def mk_mut() do
+    Bootstrap.bootstrap_mutable()
+      |> Mutable.env_new(%{
+          "debug_atom" =>
+              Bootstrap.state_fun(fn x ->
+                fn state ->
+                  {Types.atom(x), state}
+                end
+              end, [:integer]),
+          "debug_get_environment" =>
+            Bootstrap.state_fun(fn ->
+              fn state ->
+                {Types.map(state.environment), state}
+              end
+            end, []),
+          "debug_get_atoms" =>
+            Bootstrap.state_fun(fn ->
+              fn state ->
+                {Types.map(state.atoms), state}
+              end
+            end, []),
+        })
+  end
   def main() do
-    loop(Bootstrap.bootstrap_mutable())
+    loop(mk_mut())
   end
   defp loop(mutable) do
     IO.write(:stdio, "user> ")
@@ -27,7 +49,7 @@ defmodule RuleEngine.LISP do
         IO.puts("Unexpected: #{inspect what}")
         nil
     end
-    
+
   end
   defp read_eval_print(mutable, input) do
     case read(input) do
@@ -37,7 +59,7 @@ defmodule RuleEngine.LISP do
             out = print(res)
             {:ok, out, nmutable}
           res -> res
-        end      
+        end
       res -> res
     end
   end
@@ -67,12 +89,7 @@ defmodule RuleEngine.LISP do
       word_of(symbol_regex)
         |> tol()
         |> pipe(fn [sy] ->
-          case sy do
-            "true" -> Types.symbol(true)
-            "false" -> Types.symbol(false)
-            "nil" -> Types.symbol(nil)
-            _ -> Types.symbol(sy)
-          end
+          Types.symbol(sy)
         end)
     end
     def parse_number() do
@@ -110,10 +127,10 @@ defmodule RuleEngine.LISP do
         ]), option(spaces()))
     end
     def parse_root() do
-      parse_list()
+      parse_value()
     end
   end
-  
+
   def read(text) do
     case text do
       "" -> {:ignore}
@@ -146,13 +163,19 @@ defmodule RuleEngine.LISP do
       [print(k), " => ", print(v)]
     end) |> Enum.join(", "), "}"]
   end
+  def print(%Token{type: :function, macro: true}) do
+    "macro ->."
+  end
   def print(%Token{type: :function}) do
     "function ->."
   end
-  def print(result), do: inspect(result)
+  def print(%Token{type: :hack} = tok) do
+    inspect(tok.value)
+  end
+  def print(result), do: print(Bootstrap.convert(result))
 
   def eval(ast, mutable) do
-    {res, nmutable} = State.run(mutable, RuleEngine.Reduce.reduce(ast))
+    {res, nmutable} = RuleEngine.Reduce.reduce(ast).(mutable)
     {:ok, res, nmutable}
   catch
     {:not_a_function, tok} -> {:error, {:not_a_function, tok}}

@@ -2,7 +2,9 @@ defmodule RuleEngine.Mutable do
   defstruct [
     next_atom: 1,
     atoms: %{},
-    environment: %{}
+    environment: %{},
+    environment_id: 1,
+    reductions: 0,
   ]
 
   def atom_new(mutable, value) do
@@ -16,7 +18,7 @@ defmodule RuleEngine.Mutable do
   end
 
   def atom_deref(mutable, atom) do
-    {mutable, Map.get(mutable.atoms, atom)}
+    {mutable, Map.get(mutable.atoms, atom, :not_found)}
   end
 
   def atom_reset!(mutable, atom, value) do
@@ -39,24 +41,58 @@ defmodule RuleEngine.Mutable do
     end
   end
 
-  def env_new(mutable, outer, data) do
-    lens = Lens.key(:environment)
-    nmutable = update_in(mutable, [lens], fn _ ->
-      %{
-        outer: outer,
-        vals: data
-      }
+  def env_inc(mutable) do
+    lens = [Lens.key(:environment_id)]
+    {[eid], nmutable} = get_and_update_in(mutable, lens, fn x ->
+      {x, x + 1}
+    end)
+    {eid, nmutable}
+  end
+  def env_override(mutable, environment) do
+    nmutable = update_in(mutable, [Lens.key(:environment)], fn _ ->
+      environment
     end)
     nmutable
   end
+  def env_new(mutable, data) do
+    {env_id, nmutable1} = env_inc(mutable)
+    nmutable2 = update_in(nmutable1, [Lens.key(:environment)], fn outer ->
+      %{
+        outer: outer,
+        vals: data,
+        id: env_id 
+      }
+    end)
+    nmutable2
+  end
+  def env_new(mutable, outer, data) do
+    {env_id, nmutable1} = env_inc(mutable)
+    nmutable2 = update_in(nmutable1, [Lens.key(:environment)], fn _ ->
+      %{
+        outer: outer,
+        vals: data,
+        id: env_id 
+      }
+    end)
+    nmutable2
+  end
+  def env_ref(mutable) do
+    mutable.environment
+  end
 
   def env_set(mutable, key, value) do
-    lens = Lens.key(:environment)
+    {env_id, nmutable1} = env_inc(mutable)
+    lens_vals = Lens.key(:environment)
       |> Lens.key(:vals)
-    nmutable = update_in(mutable, [lens], fn m ->
+    lens_id = Lens.key(:environment)
+      |> Lens.key(:id)
+    nmutable2 = update_in(nmutable1, [lens_vals], fn m ->
       Map.put(m, key, value)
     end)
-    nmutable
+    nmutable3 = update_in(nmutable2, [lens_id], fn _ ->
+      env_id
+    end)
+    nmutable3
   end
 
   def env_merge(mutable, %{vals: values}) do
@@ -93,5 +129,11 @@ defmodule RuleEngine.Mutable do
         end
       {:ok, val} -> {:ok, val}
     end
+  end
+
+  def reductions_inc(mutable) do
+    update_in(mutable, [Lens.key(:reductions)], fn x ->
+      x + 1
+    end)
   end
 end

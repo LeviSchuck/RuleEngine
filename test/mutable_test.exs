@@ -66,13 +66,14 @@ defmodule RuleEngineMutableTest do
 
   test "mutable: environment new" do
     vals = %{test: 123}
-    dummy = %{
-      outer: bootstrap(),
-      vals: vals
-    }
     mut_before = %Mutable{}
     mut_expected = %Mutable{
-      environment: dummy
+      environment: %{
+        outer: bootstrap(),
+        vals: vals,
+        id: 1,
+      },
+      environment_id: 2,
     }
     mut_after = env_new(mut_before, bootstrap(), vals)
     assert mut_expected == mut_after
@@ -83,16 +84,19 @@ defmodule RuleEngineMutableTest do
     overwrite = 345
     env = %{
       outer: bootstrap(),
-      vals: vals
+      vals: vals,
+      id: 1
     }
     mut_before = %Mutable{
-      environment: env
+      environment: env,
+      environment_id: 2,
     }
     mut_expected = %Mutable{
-      environment:
-        %{env |
-          vals: %{test: overwrite}
-        }
+      environment: %{env |
+        vals: %{test: overwrite},
+        id: 2
+      },
+      environment_id: 3
     }
     mut_after = env_set(mut_before, :test, overwrite)
     assert mut_expected == mut_after
@@ -106,15 +110,19 @@ defmodule RuleEngineMutableTest do
         outer: bootstrap(),
         vals: %{abc: 999}
       },
-      vals: vals
+      vals: vals,
+      id: 1,
     }
     mut_before = %Mutable{
-      environment: env
+      environment: env,
+      environment_id: 2
     }
     mut_expected = %Mutable{
       environment: %{env|
-        vals: Map.put(env.vals, :abc, overwrite)
-      }
+        vals: Map.put(env.vals, :abc, overwrite),
+        id: 2,
+      },
+      environment_id: 3
     }
     mut_after = env_set(mut_before, :abc, overwrite)
     assert mut_expected == mut_after

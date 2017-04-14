@@ -1,59 +1,43 @@
 defmodule RuleEngine.Reduce do
   alias RuleEngine.Types.Token
   alias RuleEngine.Mutable
-  require Monad.State, as: State
 
   def reduce(%Token{type: :list, macro: false} = tok) do
-    State.m do
-      reduce_list(tok.value)
-    end
+    reduce_list(tok.value)
   end
   def reduce(%Token{type: :symbol, macro: false} = tok) do
-    default = State.m do
-      return tok
-    end
-    case tok.value do
-      nil -> default
-      true -> default
-      false -> default
-      _ -> resolve_symbol(tok)
-    end
+    resolve_symbol(tok)
   end
 
   def reduce(%Token{} = tok) do
-    State.m do
-      return tok
+    fn state ->
+      {tok, state}
     end
   end
   def reduce_list([f | params]) do
     runfunc = fn tok ->
       arbitrary = tok.value
       case tok do
-        %Token{type: :function, macro: true} ->
-          State.m do
-            res <- arbitrary.(params)
-            return res
-          end
+        %Token{type: :function, macro: true} -> arbitrary.(params)
         %Token{type: :function} ->
-          State.m do
-            vs <- leftReduce(params)
-            res <- arbitrary.(vs)
-            return res
+          fn state ->
+            {vs, state2} = leftReduce(params).(state)
+            arbitrary.(vs).(state2)
           end
         _ -> throw {:not_a_function, tok}
       end
     end
-    State.m do
-      fun <- reduce(f)
-      case fun do
-        %Token{type: :function} = tok -> runfunc.(tok)
+    fn state ->
+      {fun, state2} = reduce(f).(state)
+      {result, state3} = case fun do
+        %Token{type: :function} = tok -> runfunc.(tok).(state2)
         %Token{type: :symbol} ->
-          State.m do
-            tok <- resolve_symbol(fun)
-            runfunc.(tok)
-          end
+            {tok, state2_2} = resolve_symbol(fun).(state2)
+            runfunc.(tok).(state2_2)
         _ -> throw {:not_a_function, fun}
       end
+      {_, state4} = add_reduction().(state3)
+      {result, state4}
     end
   end
   def reduce_list(_ast) do
@@ -61,29 +45,33 @@ defmodule RuleEngine.Reduce do
   end
 
   def resolve_symbol(%Token{value: sy} = sy_tok) do
-    State.m do
-      mut <- State.get()
-      tok <- return Mutable.env_lookup(mut, sy)
-      case tok do
-        {:ok, val} ->
-          State.m do
-            return val
-          end
+    fn state ->
+      tok = Mutable.env_lookup(state, sy)
+      result = case tok do
+        {:ok, val} -> val
         :not_found -> throw {:no_symbol_found, sy_tok}
       end
+      {_, state2} = add_reduction().(state)
+      {result, state2}
+    end
+  end
+
+  def add_reduction() do
+    fn state ->
+      {nil, Mutable.reductions_inc(state)}
     end
   end
 
   defp leftReduce([]) do
-    State.m do
-      return []
+    fn state ->
+      {[], state}
     end
   end
   defp leftReduce([head | tail]) do
-    State.m do
-      v <- reduce(head)
-      r <- leftReduce(tail)
-      return [v | r]
+    fn state ->
+      {v, state2} = reduce(head).(state)
+      {r, state3} = leftReduce(tail).(state2)
+      {[v | r], state3}
     end
   end
 end

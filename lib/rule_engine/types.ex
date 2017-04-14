@@ -25,6 +25,9 @@ defmodule RuleEngine.Types do
   def function?(%Token{type: :function}), do: true
   def function?(_), do: false
 
+  def atom?(%Token{type: :atom}), do: true
+  def atom?(_), do: false
+
   def macro?(%Token{type: :function, macro: true}), do: true
   def macro?(_), do: false
 
@@ -44,6 +47,8 @@ defmodule RuleEngine.Types do
   def function(f) when is_function(f), do: mk(:function, f)
   def macro(f) when is_function(f), do: mkm(f)
   def boolean(b) when is_boolean(b), do: mk(:symbol, b)
+  def atom(a), do: mk(:atom, a)
+  def hack(a), do: mk(:hack, a)
 
   defp mk(ty, val), do: %Token{type: ty, value: val}
   defp mkm(val), do: %Token{type: :function, macro: true, value: val}

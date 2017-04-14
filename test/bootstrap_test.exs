@@ -2,10 +2,9 @@ defmodule RuleEngineBootstrapTest do
   use ExUnit.Case
   import RuleEngine.Bootstrap
   import RuleEngine.Types
-  require Monad.State, as: State
 
   def execute(fun, args) do
-    {res, _} = State.run(nil, fun.value.(args))
+    {res, _} = fun.value.(args).(bootstrap_mutable())
     res
   end
   def gfun(key) do
@@ -134,5 +133,61 @@ defmodule RuleEngineBootstrapTest do
     l2 = [s1]
     assert s3 == execute(fun, l1)
     assert s1 == execute(fun, l2)
+  end
+
+  test "bootstrap: true" do
+    fun = gfun("true")
+    assert fun == symbol(true)
+  end
+
+  test "bootstrap: false" do
+    fun = gfun("false")
+    assert fun == symbol(false)
+  end
+
+  test "bootstrap: nil" do
+    fun = gfun("nil")
+    assert fun == symbol(nil)
+  end
+
+  test "bootstrap: atom" do
+    fun = gfun("atom")
+    assert atom(1) == execute(fun, [symbol(nil)])
+  end
+
+  test "bootstrap: atom set" do
+    do_fun = gfun("do")
+    v1 = number(123)
+    v2 = number(234)
+    hard_atom = atom(1)
+    assert v2 == execute(do_fun, [
+      list([symbol("atom"), v1]),
+      list([symbol("reset!"), hard_atom, v2]),
+      ])
+  end
+
+  test "bootstrap: atom deref" do
+    do_fun = gfun("do")
+    v1 = number(123)
+    hard_atom = atom(1)
+    assert v1 == execute(do_fun, [
+      list([symbol("atom"), v1]),
+      list([symbol("deref"), hard_atom]),
+      ])
+  end
+
+  test "bootstrap: let" do
+    let_fun = gfun("let")
+    v1 = number(123)
+    sy = symbol("x")
+    opid = function(fn [arg] ->
+      fn state ->
+        {arg, state}
+      end
+    end)
+    assert v1 == execute(let_fun, [
+      list([sy, v1]),
+      list([opid, sy])
+      ])
   end
 end
