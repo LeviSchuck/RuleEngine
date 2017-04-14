@@ -14,8 +14,8 @@ defmodule RuleEngine.Types do
   def list?(%Token{type: :list}), do: true
   def list?(_), do: false
 
-  def map?(%Token{type: :map}), do: true
-  def map?(_), do: false
+  def dict?(%Token{type: :dict}), do: true
+  def dict?(_), do: false
 
   def string?(%Token{type: :string}), do: true
   def string?(_), do: false
@@ -40,7 +40,7 @@ defmodule RuleEngine.Types do
   def nil?(%Token{type: :symbol, value: nil}), do: true
   def nil?(_), do: false
 
-  def map(%{} = m), do: mk(:map, m)
+  def dict(%{} = m), do: mk(:dict, m)
   def list(l) when is_list(l), do: mk(:list, l)
   def symbol(s) when is_atom(s) or is_binary(s), do: mk(:symbol, s)
   def string(s) when is_binary(s), do: mk(:string, s)

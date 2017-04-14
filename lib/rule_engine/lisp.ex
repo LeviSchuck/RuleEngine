@@ -15,13 +15,13 @@ defmodule RuleEngine.LISP do
           "debug_get_environment" =>
             Bootstrap.state_fun(fn ->
               fn state ->
-                {Types.map(state.environment), state}
+                {Types.dict(state.environment), state}
               end
             end, []),
           "debug_get_atoms" =>
             Bootstrap.state_fun(fn ->
               fn state ->
-                {Types.map(state.atoms), state}
+                {Types.dict(state.atoms), state}
               end
             end, []),
           "debug_reductions" =>
@@ -91,7 +91,7 @@ defmodule RuleEngine.LISP do
         end)
     end
     def parse_symbol() do
-      symbol_regex = ~r/[a-z_0-9!?*<>=!#^+\-]+/
+      symbol_regex = ~r/[a-z_0-9!?*<>=\!\#\^\+\-\|\&]+/
       word_of(symbol_regex)
         |> tol()
         |> pipe(fn [sy] ->
@@ -120,7 +120,7 @@ defmodule RuleEngine.LISP do
       |> pipe(fn [xs] ->
         Enum.map(xs, fn [k, _, v, _] -> {k, v} end)
           |> Enum.into(%{})
-          |> Types.map()
+          |> Types.dict()
       end), char("}"))
     end
     def parse_value() do
@@ -164,7 +164,7 @@ defmodule RuleEngine.LISP do
   def print(%Token{type: :string} = tok) do
     inspect(tok.value)
   end
-  def print(%Token{type: :map} = tok) do
+  def print(%Token{type: :dict} = tok) do
     ["%{", Enum.map(tok.value, fn {k, v} ->
       [print(k), " => ", print(v)]
     end) |> Enum.join(", "), "}"]

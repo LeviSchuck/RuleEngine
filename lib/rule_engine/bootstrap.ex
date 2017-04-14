@@ -15,15 +15,21 @@ defmodule RuleEngine.Bootstrap do
         ">" => mkfun(fn x, y -> x > y end, [:any, :any]),
         "<=" => mkfun(fn x, y -> x <= y end, [:any, :any]),
         ">=" => mkfun(fn x, y -> x >= y end, [:any, :any]),
-        # Folding operations
+        # Combinatoral
+        "&&" => mkfun(fn x, y -> x && y end, [:boolean, :boolean]),
+        "||" => mkfun(fn x, y -> x || y end, [:boolean, :boolean]),
+        "++" => mkfun(fn x, y -> x <> y end, [:string, :string]),
+        # Folding Combinatoral operations
         "+" => plusfun(),
         "-" => minusfun(),
+        "and" => and_fun(),
+        "or" => or_fun(),
         # Types
         "nil?" => simple_fun(&nil?/1),
         "boolean?" => simple_fun(&boolean?/1),
         "symbol?" => simple_fun(&symbol?/1),
         "list?" => simple_fun(&list?/1),
-        "map?" => simple_fun(&map?/1),
+        "dict?" => simple_fun(&dict?/1),
         "string?" => simple_fun(&string?/1),
         "number?" => simple_fun(&number?/1),
         "function?" => simple_fun(&function?/1),
@@ -70,7 +76,7 @@ defmodule RuleEngine.Bootstrap do
       {convert(k), convert(v)}
     end)
       |> Enum.into(%{})
-      |> map()
+      |> dict()
   end
   def convert(res) when is_list(res) do
     Enum.map(res, &convert/1)
@@ -104,7 +110,7 @@ defmodule RuleEngine.Bootstrap do
       cond do
         ltypes == largs ->
           argtys = Enum.zip(types, args)
-          type_check = Enum.reduce_while(argtys, {%{}, :ok}, fn {ty, %Token{type: t}}, {same, :ok} ->
+          type_check = Enum.reduce_while(argtys, {%{}, :ok}, fn {ty, %Token{type: t, } = tok}, {same, :ok} ->
             case ty do
               {:same, label} ->
                 case Map.get(same, label, :not_found) do
@@ -116,6 +122,11 @@ defmodule RuleEngine.Bootstrap do
                     end
                 end
               :any -> {:cont, {same, :ok}}
+              :boolean ->
+                cond do
+                  boolean?(tok) -> {:cont, {same, :ok}}
+                  true -> {:halt, {:error, err_type(:boolean, t)}}
+                end
               other ->
                 cond do
                   other == t -> {:cont, {same, :ok}}
@@ -199,6 +210,41 @@ defmodule RuleEngine.Bootstrap do
     end
     wrap_state(lambda)
   end
+
+  defp and_fun() do
+    simple_macro(fn ast ->
+      fn state ->
+        {res, state_final} = Enum.reduce_while(ast, {true, state}, fn v, {_, s} ->
+          {res, state2} = Reduce.reduce(v).(s)
+          case res do
+            %Token{type: :symbol, value: nil} -> {:halt, {false, state2}}
+            %Token{type: :symbol, value: false} -> {:halt, {false, state2}}
+            %Token{type: :symbol, value: true} -> {:cont, {true, state2}}
+            _ -> throw err_type(:boolean, v.type, v)
+          end
+        end)
+        {symbol(res), state_final}
+      end
+    end)
+  end
+
+  defp or_fun() do
+    simple_macro(fn ast ->
+      fn state ->
+        {res, state_final} = Enum.reduce_while(ast, {false, state}, fn v, {_, s} ->
+          {res, state2} = Reduce.reduce(v).(s)
+          case res do
+            %Token{type: :symbol, value: nil} -> {:cont, {false, state2}}
+            %Token{type: :symbol, value: false} -> {:cont, {false, state2}}
+            %Token{type: :symbol, value: true} -> {:halt, {true, state2}}
+            _ -> throw err_type(:boolean, v.type, v)
+          end
+        end)
+        {symbol(res), state_final}
+      end
+    end)
+  end
+
   defp make_atom(value) do
     fn state ->
       {state2, atom_ref} = Mutable.atom_new(state, value)
