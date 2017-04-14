@@ -35,6 +35,7 @@ defmodule RuleEngine.Bootstrap do
         "if" => if_fun(),
         "let" => let_fun(),
         "fn" => lambda_fun(),
+        "def" => def_fun(),
         # Built in symbols
         "true" => symbol(true),
         true => symbol(true),
@@ -336,6 +337,30 @@ defmodule RuleEngine.Bootstrap do
             end)
             closure = add_closure(fun, Mutable.env_ref(state))
             {closure, state}
+          end
+        _ -> throw err_arity(2, length(ast))
+      end
+    end)
+  end
+  def def_fun() do
+    simple_macro(fn ast ->
+      case ast do
+        [identifier, body] ->
+          fn state ->
+            {ident_ref, state2} = case identifier do
+              %Token{type: :list} ->
+                {ident_val, state1_1} = Reduce.reduce(identifier).(state)
+                case ident_val do
+                  %Token{type: :symbol} -> nil
+                  _ -> throw err_type(:symbol, ident_val.type, ident_val)
+                end
+                {ident_val, state1_1}
+              %Token{type: :symbol} -> {identifier, state}
+              _ -> throw err_type(:symbol, identifier, identifier)
+            end
+            {body_val, state3} = Reduce.reduce(body).(state2)
+            state4 = Mutable.env_set(state3, ident_ref.value, body_val)
+            {body_val, state4}
           end
         _ -> throw err_arity(2, length(ast))
       end

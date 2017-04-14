@@ -4,8 +4,11 @@ defmodule RuleEngineBootstrapTest do
   import RuleEngine.Types
 
   def execute(fun, args) do
-    {res, _} = fun.value.(args).(bootstrap_mutable())
+    {res, _} = eval(fun, args)
     res
+  end
+  def eval(fun, args) do
+    fun.value.(args).(bootstrap_mutable())
   end
   def gfun(key) do
     fun = case bootstrap_environment() do
@@ -210,5 +213,14 @@ defmodule RuleEngineBootstrapTest do
         number(n1)
         ])
       ])
+  end
+  test "bootstrap: def" do
+    def_fun = gfun("def")
+    key = "x"
+    sy = symbol(key)
+    n1 = number(100)
+    {res, state} = eval(def_fun, [sy, n1])
+    assert res == n1
+    assert state.environment.vals[key] == n1
   end
 end
