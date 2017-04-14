@@ -60,7 +60,7 @@ defmodule RuleEngine.Mutable do
       %{
         outer: outer,
         vals: data,
-        id: env_id 
+        id: env_id
       }
     end)
     nmutable2
@@ -71,7 +71,7 @@ defmodule RuleEngine.Mutable do
       %{
         outer: outer,
         vals: data,
-        id: env_id 
+        id: env_id
       }
     end)
     nmutable2
@@ -119,7 +119,7 @@ defmodule RuleEngine.Mutable do
         end
     end
   end
-  
+
   def env_get(environment, key) do
     case env_retrieve_key(environment, key) do
       :not_found ->

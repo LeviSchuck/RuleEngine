@@ -190,4 +190,25 @@ defmodule RuleEngineBootstrapTest do
       list([opid, sy])
       ])
   end
+
+  test "bootstrap: fn" do
+    let_fun = gfun("let")
+    n1 = 10
+    n2 = 100
+    sy_x = symbol("x")
+    sy_y = symbol("y")
+    sy_fn = symbol("fn")
+    sy_plus = symbol("+")
+    assert number(n1 + n1 + n2) == execute(let_fun, [
+      list([sy_y, number(n2)]),
+      list([
+        list([
+          sy_fn,
+          list([sy_x]),
+          list([sy_plus, sy_x, sy_x, sy_y])
+          ]),
+        number(n1)
+        ])
+      ])
+  end
 end

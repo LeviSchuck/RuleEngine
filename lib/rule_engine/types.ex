@@ -4,7 +4,8 @@ defmodule RuleEngine.Types do
       type: nil,
       value: nil,
       meta: nil,
-      macro: false
+      macro: false,
+      env: nil
     ]
   end
   def symbol?(%Token{type: :symbol}), do: true
@@ -49,6 +50,8 @@ defmodule RuleEngine.Types do
   def boolean(b) when is_boolean(b), do: mk(:symbol, b)
   def atom(a), do: mk(:atom, a)
   def hack(a), do: mk(:hack, a)
+
+  def add_closure(fun, env), do: %{fun | env: env}
 
   defp mk(ty, val), do: %Token{type: ty, value: val}
   defp mkm(val), do: %Token{type: :function, macro: true, value: val}

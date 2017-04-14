@@ -5,7 +5,7 @@ defmodule RuleEngine.Reduce do
   def reduce(%Token{type: :list, macro: false} = tok) do
     reduce_list(tok.value)
   end
-  def reduce(%Token{type: :symbol, macro: false} = tok) do
+  def reduce(%Token{type: :symbol} = tok) do
     resolve_symbol(tok)
   end
 
@@ -29,12 +29,28 @@ defmodule RuleEngine.Reduce do
     end
     fn state ->
       {fun, state2} = reduce(f).(state)
-      {result, state3} = case fun do
-        %Token{type: :function} = tok -> runfunc.(tok).(state2)
+      {{fun_res, fun_ref}, state2} = case fun do
+        %Token{type: :function} = tok ->
+          {res, state2_1} = runfunc.(tok).(state2)
+          {{res, tok}, state2_1}
         %Token{type: :symbol} ->
-            {tok, state2_2} = resolve_symbol(fun).(state2)
-            runfunc.(tok).(state2_2)
+            {tok, state2_1} = resolve_symbol(fun).(state2)
+            {res, state2_2} = runfunc.(tok).(state2_1)
+            {{res, tok}, state2_2}
         _ -> throw {:not_a_function, fun}
+      end
+      {result, state3} = case fun_res do
+        fun when is_function(fun) ->
+          env = case fun_ref do
+            %Token{env: nil} -> Mutable.env_ref(state2)
+            %Token{env: environment} -> environment
+          end
+          env_pre = Mutable.env_ref(state2)
+          state2_1 = Mutable.env_override(state2, env)
+          {res, state2_2} = fun.(state2_1)
+          state2_3 = Mutable.env_override(state2_2, env_pre)
+          {res, state2_3}
+        val -> {val, state2}
       end
       {_, state4} = add_reduction().(state3)
       {result, state4}
@@ -62,12 +78,12 @@ defmodule RuleEngine.Reduce do
     end
   end
 
-  defp leftReduce([]) do
+  def leftReduce([]) do
     fn state ->
       {[], state}
     end
   end
-  defp leftReduce([head | tail]) do
+  def leftReduce([head | tail]) do
     fn state ->
       {v, state2} = reduce(head).(state)
       {r, state3} = leftReduce(tail).(state2)

@@ -9,9 +9,9 @@ defmodule RuleEngine.LISP do
           "debug_atom" =>
               Bootstrap.state_fun(fn x ->
                 fn state ->
-                  {Types.atom(x), state}
+                  {Types.atom(x.value), state}
                 end
-              end, [:integer]),
+              end, [:number]),
           "debug_get_environment" =>
             Bootstrap.state_fun(fn ->
               fn state ->
@@ -164,15 +164,20 @@ defmodule RuleEngine.LISP do
     end) |> Enum.join(", "), "}"]
   end
   def print(%Token{type: :function, macro: true}) do
-    "macro ->."
+    "macro->"
   end
   def print(%Token{type: :function}) do
-    "function ->."
+    "fn->"
   end
   def print(%Token{type: :hack} = tok) do
     inspect(tok.value)
   end
-  def print(result), do: print(Bootstrap.convert(result))
+  def print(%Token{type: :atom} = tok) do
+    "#atom_#{tok.value}"
+  end
+  def print(result) do
+    "Unsupported?: #{inspect result}"
+  end
 
   def eval(ast, mutable) do
     {res, nmutable} = RuleEngine.Reduce.reduce(ast).(mutable)
@@ -185,5 +190,6 @@ defmodule RuleEngine.LISP do
     {:type_mismatch, :same, ref_ty, t} -> {:error, "Expected the same type for some args as prior args, namely #{ref_ty} instead of #{t}"}
     {:type_mismatch, ref_ty, t} -> {:error, "Expected #{ref_ty} as argument type, but got #{t}"}
     {:type_mismatch, ref_ty, t, val} -> {:error, "Expected #{ref_ty} as argument type, but got #{t}: #{print(val)}"}
+    {:no_atom_found, atom_ref} -> {:error, {:no_atom_found, atom_ref}}
   end
 end

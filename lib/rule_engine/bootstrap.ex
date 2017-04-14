@@ -8,14 +8,17 @@ defmodule RuleEngine.Bootstrap do
     %{
       outer: nil,
       vals: %{
+        # Comparators
         "==" => mkfun(fn x, y -> x == y end, [:any, :any]),
         "!=" => mkfun(fn x, y -> x != y end, [:any, :any]),
         "<" => mkfun(fn x, y -> x < y end, [:any, :any]),
         ">" => mkfun(fn x, y -> x > y end, [:any, :any]),
         "<=" => mkfun(fn x, y -> x <= y end, [:any, :any]),
         ">=" => mkfun(fn x, y -> x >= y end, [:any, :any]),
+        # Folding operations
         "+" => plusfun(),
         "-" => minusfun(),
+        # Types
         "nil?" => simple_fun(&nil?/1),
         "boolean?" => simple_fun(&boolean?/1),
         "symbol?" => simple_fun(&symbol?/1),
@@ -25,22 +28,26 @@ defmodule RuleEngine.Bootstrap do
         "number?" => simple_fun(&number?/1),
         "function?" => simple_fun(&function?/1),
         "macro?" => simple_fun(&macro?/1),
+        "atom?" => simple_fun(&atom?/1),
+        # Macros
         "do" => do_fun(),
         "quote" => quote_fun(),
         "if" => if_fun(),
+        "let" => let_fun(),
+        "fn" => lambda_fun(),
+        # Built in symbols
         "true" => symbol(true),
         true => symbol(true),
         "false" => symbol(false),
         false => symbol(false),
         "nil" => symbol(nil),
         nil => symbol(nil),
+        # Atom ops
         "atom" => state_fun(&make_atom/1, [:any]),
-        "atom?" => simple_fun(&atom?/1),
         "deref" => state_fun(&deref_atom/1, [:atom]),
         "reset!" => state_fun(&reset_atom/2, [:atom, :any]),
         # "swap!" => mkfun(???, [:atom, :function])
         "set!" => set_fun(),
-        "let" => let_fun(),
       },
       id: 0
     }
@@ -78,7 +85,7 @@ defmodule RuleEngine.Bootstrap do
         [arg] ->
           fun.(arg)
             |> convert()
-        _ -> {:error, err_arity(1, largs)}
+        _ -> throw err_arity(1, largs)
       end
     end
     wrap_state(lambda)
@@ -121,9 +128,9 @@ defmodule RuleEngine.Bootstrap do
                 :convert -> exec_fun(fun, args)
                 :naked -> apply(fun, args)
               end
-            {:error, err} -> {:error, err}
+            {:error, err} -> throw err
           end
-        true -> {:error, err_arity(ltypes, largs)}
+        true -> throw err_arity(ltypes, largs)
       end
     end
   end
@@ -151,12 +158,13 @@ defmodule RuleEngine.Bootstrap do
   end
 
   defp all_type_check(args, type) do
-    Enum.reduce_while(args, :ok, fn %Token{type: t}, :ok ->
+    Enum.each(args, fn %Token{type: t} = tok ->
       case t do
-        ^type -> {:cont, :ok}
-        _ -> {:halt, {:error, {:type_mismatch, "Expected #{type} as argument type, but got #{t}"}}}
+        ^type -> nil
+        _ -> throw err_type(type, t, tok)
       end
     end)
+    :ok
   end
 
   defp minusfun() do
@@ -189,6 +197,31 @@ defmodule RuleEngine.Bootstrap do
       end
     end
     wrap_state(lambda)
+  end
+  defp make_atom(value) do
+    fn state ->
+      {state2, atom_ref} = Mutable.atom_new(state, value)
+      {atom(atom_ref), state2}
+    end
+  end
+
+  defp deref_atom(atom) do
+    atom_ref = Map.get(atom, :value, atom)
+    fn state ->
+      {state2, atom_val} = Mutable.atom_deref(state, atom_ref)
+      case atom_val do
+        :not_found -> throw err_no_atom(atom_ref)
+        _ -> {atom_val, state2}
+      end
+    end
+  end
+
+  defp reset_atom(atom, atom_value) do
+    atom_ref = atom.value
+    fn state ->
+      {state2, rvalue} = Mutable.atom_reset!(state, atom_ref, atom_value)
+      {rvalue, state2}
+    end
   end
 
   # Macros
@@ -264,6 +297,50 @@ defmodule RuleEngine.Bootstrap do
       end
     end)
   end
+  def lambda_fun() do
+    simple_macro(fn ast ->
+      case ast do
+        [bindings, body] ->
+          case bindings do
+            %Token{type: :list} -> nil
+            _ -> throw err_type(:list, bindings.type, bindings)
+          end
+          fn state ->
+            fun = function(fn args ->
+              fn fun_state ->
+                {bound, fun_state2} = Enum.map_reduce(bindings.value, fun_state, fn binding, st ->
+                  case binding do
+                    %Token{type: :list} -> Reduce.reduce(binding).(st)
+                    %Token{type: :symbol} -> {binding, st}
+                    _ -> throw err_type(:list, bindings.type, bindings)
+                  end
+                end)
+                Enum.each(bound, fn binding ->
+                  case binding do
+                    %Token{type: :symbol} -> nil
+                    _ -> throw err_type(:symbol, binding.type, binding)
+                  end
+                end)
+                matched = zip_bias_left(bound, args)
+                {vals, fun_state3} = Enum.reduce(matched, {%{}, fun_state2}, fn {k,v}, {vs, st} ->
+                  {res, post_state} = Reduce.reduce(v).(st)
+                  {Map.put(vs, k.value, res), post_state}
+                end)
+                # Finally, have the outside say it has placed the environment
+                last = fn final_state ->
+                  final_state2 = Mutable.env_new(final_state, vals)
+                  Reduce.reduce(body).(final_state2)
+                end
+                {last, fun_state3}
+              end
+            end)
+            closure = add_closure(fun, Mutable.env_ref(state))
+            {closure, state}
+          end
+        _ -> throw err_arity(2, length(ast))
+      end
+    end)
+  end
 
   # Helpers
 
@@ -314,27 +391,12 @@ defmodule RuleEngine.Bootstrap do
     end
   end
 
-  defp make_atom(value) do
-    fn state ->
-      {state2, atom_ref} = Mutable.atom_new(state, value)
-      {atom(atom_ref), state2}
-    end
+  def zip_bias_left([], _), do: []
+  def zip_bias_left([head | rest], []) do
+    [{head, nil} | zip_bias_left(rest, [])]
   end
-
-  defp deref_atom(atom) do
-    atom_ref = Map.get(atom, :value, atom)
-    fn state ->
-      {state2, atom_val} = Mutable.atom_deref(state, atom_ref)
-      {atom_val, state2}
-    end
-  end
-
-  defp reset_atom(atom, atom_value) do
-    atom_ref = atom.value
-    fn state ->
-      {state2, rvalue} = Mutable.atom_reset!(state, atom_ref, atom_value)
-      {rvalue, state2}
-    end
+  def zip_bias_left([headk | restk], [headv | restv]) do
+    [{headk, headv} | zip_bias_left(restk, restv)]
   end
 
   # Errors
@@ -349,5 +411,8 @@ defmodule RuleEngine.Bootstrap do
   end
   def err_type(ref_ty, t) do
     {:type_mismatch, ref_ty, t}
+  end
+  def err_no_atom(atom_ref) do
+    {:no_atom_found, atom_ref}
   end
 end
