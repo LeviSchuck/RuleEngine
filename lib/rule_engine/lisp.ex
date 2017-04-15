@@ -135,7 +135,7 @@ defmodule RuleEngine.LISP do
         ]), option(spaces()))
     end
     def parse_root do
-      parse_value
+      parse_value()
     end
   end
 

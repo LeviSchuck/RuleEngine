@@ -21,7 +21,7 @@ defmodule RuleEngine.Reduce do
         %Token{type: :function, macro: true} -> arbitrary.(params)
         %Token{type: :function} ->
           fn state ->
-            {vs, state2} = leftReduce(params).(state)
+            {vs, state2} = list_reduce(params).(state)
             arbitrary.(vs).(state2)
           end
         _ -> throw {:not_a_function, tok}
@@ -77,15 +77,15 @@ defmodule RuleEngine.Reduce do
     end
   end
 
-  def leftReduce([]) do
+  def list_reduce([]) do
     fn state ->
       {[], state}
     end
   end
-  def leftReduce([head | tail]) do
+  def list_reduce([head | tail]) do
     fn state ->
       {v, state2} = reduce(head).(state)
-      {r, state3} = leftReduce(tail).(state2)
+      {r, state3} = list_reduce(tail).(state2)
       {[v | r], state3}
     end
   end

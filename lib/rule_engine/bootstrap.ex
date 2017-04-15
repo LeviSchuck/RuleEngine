@@ -24,6 +24,9 @@ defmodule RuleEngine.Bootstrap do
         "-" => minus_fun(),
         "and" => and_fun(),
         "or" => or_fun(),
+        # Iteration
+        "map" => map_fun(),
+        "reduce" => reduce_fun(),
         # Types
         "nil?" => simple_fun(&nil?/1),
         "boolean?" => simple_fun(&boolean?/1),
@@ -253,6 +256,83 @@ defmodule RuleEngine.Bootstrap do
       end
     end)
   end
+
+  def map_fun do
+    simple_macro(fn ast ->
+      case ast do
+        [collection, fun] ->
+          fn state ->
+            {fun_ref, state2} = Reduce.reduce(fun).(state)
+            case fun_ref do
+              %Token{type: :function} -> nil
+              _ -> throw err_type(:function, fun_ref.type, fun_ref)
+            end
+            {col_ref, state3} = Reduce.reduce(collection).(state2)
+            case col_ref do
+              %Token{type: :list} -> map_fun_list(fun_ref, col_ref, state3)
+              %Token{type: :dict} -> map_fun_dict(fun_ref, col_ref, state3)
+              _ -> throw err_type([:list, :dict], col_ref.type, col_ref)
+            end
+          end
+        _ -> throw err_arity(2, length(ast))
+      end
+    end)
+  end
+  defp map_fun_list(fun_ref, col_ref, state) do
+    {res, state2} = Enum.map_reduce(col_ref.value, state, fn col, s ->
+      {val, s2} = Reduce.reduce(list([fun_ref, col])).(s)
+      {val, s2}
+    end)
+    res_list = res
+      |> list()
+    {res_list, state2}
+  end
+  defp map_fun_dict(fun_ref, col_ref, state) do
+    {res, state2} = Enum.map_reduce(col_ref.value, state, fn {k_col, v_col}, s ->
+      {val, s2} = Reduce.reduce(list([fun_ref, k_col, v_col])).(s)
+      {{k_col, val}, s2}
+    end)
+    as_dict = Enum.into(res, %{})
+      |> dict()
+    {as_dict, state2}
+  end
+
+  def reduce_fun do
+    simple_macro(fn ast ->
+      case ast do
+        [collection, acc, fun] ->
+          fn state ->
+            {fun_ref, state2} = Reduce.reduce(fun).(state)
+            case fun_ref do
+              %Token{type: :function} -> nil
+              _ -> throw err_type(:function, fun_ref.type, fun_ref)
+            end
+            {col_ref, state3} = Reduce.reduce(collection).(state2)
+            case col_ref do
+              %Token{type: :list} -> reduce_fun_list(fun_ref, col_ref, acc, state3)
+              %Token{type: :dict} -> reduce_fun_dict(fun_ref, col_ref, acc, state3)
+              _ -> throw err_type([:list, :dict], col_ref.type, col_ref)
+            end
+          end
+      end
+    end)
+  end
+
+  defp reduce_fun_list(fun_ref, col_ref, acc, state) do
+    {res, state2} = Enum.reduce(col_ref.value, {acc, state}, fn col, {a, s} ->
+      {next_a, s2} = Reduce.reduce(list([fun_ref, col, a])).(s)
+      {next_a, s2}
+    end)
+    {res, state2}
+  end
+  defp reduce_fun_dict(fun_ref, col_ref, acc, state) do
+    {res, state2} = Enum.reduce(col_ref.value, {acc, state}, fn {k_col, v_col}, {a, s} ->
+      {next_a, s2} = Reduce.reduce(list([fun_ref, k_col, v_col, a])).(s)
+      {next_a, s2}
+    end)
+    {res, state2}
+  end
+
 
   defp make_atom(value) do
     fn state ->

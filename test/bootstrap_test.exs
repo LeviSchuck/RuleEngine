@@ -117,6 +117,31 @@ defmodule RuleEngineBootstrapTest do
     assert symbol(false) == execute(fun, [symbol(false), symbol(false)])
   end
 
+  test "bootstrap: map" do
+    fun = gfun("map")
+    opinc = function(fn [arg] ->
+      fn state ->
+        {number(arg.value + 1), state}
+      end
+    end)
+    assert list([number(2), number(3)]) == execute(fun, [
+      list([
+        symbol("quote"),
+        list([number(1), number(2)])
+        ]),
+      opinc
+      ])
+  end
+
+  test "bootstrap: reduce" do
+    fun = gfun("reduce")
+    assert number(5) == execute(fun, [
+      list([symbol("quote"), list([number(3), number(2)])]),
+      number(0),
+      symbol("+")
+      ])
+  end
+
   test "bootstrap: nil?" do
     fun = gfun("nil?")
     assert symbol(false) == execute(fun, [number(100)])
