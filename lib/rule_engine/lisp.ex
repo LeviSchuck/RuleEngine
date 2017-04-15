@@ -1,35 +1,120 @@
 defmodule RuleEngine.LISP do
   @moduledoc """
   RuleEngine Execution and AST most closely match that of LISP.
-  To render LISP expressions from strings to the AST, use
-  `read/1`.
+  To render LISP expressions from strings to the AST,
+  use `RuleEngine.LISP.parse/1`.
   To convert an AST to a string, you can just use inspect.
-  To evaluate an AST with an environment and get back an AST or an error,
-  use `eval/2`.
-
+  To evaluate an AST with an environment and get back an AST or an
+  internal error, use `RuleEngine.LISP.eval/2`.
   """
+
   alias RuleEngine.Bootstrap
   alias RuleEngine.Mutable
   alias RuleEngine.Types
   alias RuleEngine.Types.Token
   alias RuleEngine.Reduce
-  def mk_mut do
-    Bootstrap.bootstrap_mutable()
-      |> Mutable.env_new(%{
-          "debug_atom" => debug_atom(),
-          "debug_get_environment" => debug_get_environment(),
-          "debug_get_atoms" => debug_get_atoms(),
-          "debug_reductions" => debug_reductions(),
-          "debug_set_max_reductions" => debug_set_max_reductions(),
-        })
+  alias RuleEngine.LISP.Parser
+
+  @doc """
+  A couple internally provided functions are available which have access
+  to internal state, or can wrap constants as if reference values.
+  """
+  @spec debug_environment :: %{}
+  def debug_environment do
+    %{
+        "debug_atom" => debug_atom(),
+        "debug_get_environment" => debug_get_environment(),
+        "debug_get_atoms" => debug_get_atoms(),
+        "debug_reductions" => debug_reductions(),
+        "debug_set_max_reductions" => debug_set_max_reductions(),
+      }
   end
+
+  @doc """
+  To run a basic repl with a terminal user, `main/0` is available.
+  """
   def main do
-    loop(mk_mut())
+    main(debug_environment())
   end
+  @doc """
+  If other libraries want a repl with their own internal functions,
+  use `main/1` to specify a map of symbol names (as string) to functions.
+
+  ## Example
+  ```
+  alias RuleEngine.Bootstrap
+  alias RuleEngine.LISP
+  env = %{
+    "name_here" => Bootstrap.mkfun(fn -> "logic here" end, [])
+  }
+  LISP.main(env)
+  user> (name_here)
+  "logic here"
+  ```
+
+  """
   def main(environment) do
-    mut = Mutable.env_new(mk_mut(), environment)
+    mut = Bootstrap.bootstrap_mutable()
+      |> Mutable.env_new(environment)
     loop(mut)
   end
+
+  @doc """
+  To parse a LISP string to an AST, use `parse/1`.
+  A successfully parsed AST does not mean that the AST
+  will evaluate without error.
+  """
+  @spec parse(String.t)
+    :: {:ok, Token.t}
+    | {:error, tuple}
+  def parse(text) do
+    case Combine.parse(text, Parser.parse_root()) do
+      [x] -> {:ok, x}
+      {:error, expected} -> {:error, {:parse_error, expected}}
+      res -> res
+    end
+  end
+
+  @doc """
+  To evaluate an AST within an execution context, provide the root Token
+  (likely a list) and the context.
+  If you don't have a context to use, you can use
+  `Bootstrap.bootstrap_mutable/0`.
+  Internaly thrown errors are caught and returned here.
+  """
+  @spec eval(Token.t, Mutable.t)
+    :: {:ok, Token.t, Mutable.t}
+    | {:error, String.t}
+    | {:error, tuple}
+    | {:end, String.t}
+  def eval(ast, mutable) do
+    {res, nmutable} = Reduce.reduce(ast).(mutable)
+    {:ok, res, nmutable}
+  catch
+    {:not_a_function, tok} ->
+      {:error, {:not_a_function, tok}}
+    {:no_symbol_found, tok} ->
+      {:error, {:no_symbol_found, tok}}
+    {:condition_not_boolean, tok} ->
+      {:error, {:condition_not_boolean, tok}}
+    {:arity_mismatch, expected, actual} ->
+      {:error, "Expected #{expected} arguments, but got #{actual} arguments"}
+    {:type_mismatch, :same, ref_ty, t} ->
+      {:error, """
+      Expected the same type for some args as prior args,
+      namely #{ref_ty} instead of #{t}
+      """}
+    {:type_mismatch, ref_ty, t} ->
+      {:error, "Expected #{ref_ty} as argument type, but got #{t}"}
+    {:type_mismatch, ref_ty, t, val} ->
+      {:error, "Expected #{ref_ty} as argument type, but got #{t}: #{print(val)}"}
+    {:no_atom_found, atom_ref} ->
+      {:error, {:no_atom_found, atom_ref}}
+    :max_reductions_reached ->
+      {:end, "Maximum execution reached, ending."}
+  end
+
+  # Internal exposed functions
   defp debug_atom do
     Bootstrap.state_fun(fn x ->
       fn state ->
@@ -70,6 +155,15 @@ defmodule RuleEngine.LISP do
       end
     end, [])
   end
+
+  # Internal REPL
+  defp read(text) do
+    case text do
+      "" -> {:ignore}
+      "end!" -> {:end}
+      command -> parse(command)
+    end
+  end
   defp loop(mutable) do
     IO.write(:stdio, "user> ")
     input = IO.read(:stdio, :line)
@@ -108,120 +202,7 @@ defmodule RuleEngine.LISP do
     end
   end
 
-  defmodule Parser do
-    use Combine
-    use Combine.Helpers
-    alias Combine.ParserState
-    import Combine.Parsers.Base
-    import Combine.Parsers.Text
-
-    defparser lazy(%ParserState{status: :ok} = state, generator) do
-      (generator.()).(state)
-    end
-    defp tol(x), do: [x]
-
-    def parse_text do
-      text_regex = ~r/([^\\"]|\\(\\|"))*/
-      between(char("\""), word_of(text_regex), char("\""))
-        |> tol()
-        |> pipe(fn [text] ->
-          Types.string(text)
-        end)
-    end
-    def parse_symbol do
-      symbol_regex = ~r/[a-z_0-9!?*<>=\!\#\^\+\-\|\&]+/
-      word_of(symbol_regex)
-        |> tol()
-        |> pipe(fn [sy] ->
-          Types.symbol(sy)
-        end)
-    end
-    def parse_number do
-      either(float(), integer())
-        |> tol()
-        |> pipe(fn [num] ->
-          Types.number(num)
-        end)
-    end
-    def parse_list do
-      between(char("("), many(lazy(fn -> parse_value() end)), char(")"))
-        |> tol()
-        |> pipe(fn [list] ->
-          Types.list(list)
-        end)
-    end
-    def parse_map do
-      between(string("%{"), many(lazy(fn ->
-        sequence([
-          parse_value(),
-          option(string("=>")),
-          parse_value(),
-          option(char(","))
-          ])
-      end))
-      |> tol()
-      |> pipe(fn [xs] ->
-        xs
-          |> Enum.map(fn [k, _, v, _] -> {k, v} end)
-          |> Enum.into(%{})
-          |> Types.dict()
-      end), char("}"))
-    end
-    def parse_value do
-      between(option(spaces()), choice([
-        parse_map(),
-        parse_list(),
-        parse_number(),
-        parse_text(),
-        parse_symbol()
-        ]), option(spaces()))
-    end
-    def parse_root do
-      parse_value()
-    end
-  end
-
-  def read(text) do
-    case text do
-      "" -> {:ignore}
-      "end!" -> {:end}
-      command ->
-        case Combine.parse(command, Parser.parse_root()) do
-          [x] -> {:ok, x}
-          {:error, expected} -> {:error, {:parse_error, expected}}
-          res -> res
-        end
-    end
-  end
-
-  def print(result) do
+  defp print(result) do
     inspect(result)
-  end
-
-  def eval(ast, mutable) do
-    {res, nmutable} = Reduce.reduce(ast).(mutable)
-    {:ok, res, nmutable}
-  catch
-    {:not_a_function, tok} ->
-      {:error, {:not_a_function, tok}}
-    {:no_symbol_found, tok} ->
-      {:error, {:no_symbol_found, tok}}
-    {:condition_not_boolean, tok} ->
-      {:error, {:condition_not_boolean, tok}}
-    {:arity_mismatch, expected, actual} ->
-      {:error, "Expected #{expected} arguments, but got #{actual} arguments"}
-    {:type_mismatch, :same, ref_ty, t} ->
-      {:error, """
-      Expected the same type for some args as prior args,
-      namely #{ref_ty} instead of #{t}
-      """}
-    {:type_mismatch, ref_ty, t} ->
-      {:error, "Expected #{ref_ty} as argument type, but got #{t}"}
-    {:type_mismatch, ref_ty, t, val} ->
-      {:error, "Expected #{ref_ty} as argument type, but got #{t}: #{print(val)}"}
-    {:no_atom_found, atom_ref} ->
-      {:error, {:no_atom_found, atom_ref}}
-    :max_reductions_reached ->
-      {:end, "Maximum execution reached, ending."}
   end
 end

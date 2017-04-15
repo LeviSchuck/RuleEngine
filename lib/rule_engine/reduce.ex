@@ -1,7 +1,20 @@
 defmodule RuleEngine.Reduce do
+  @moduledoc """
+  This is where computation occurs and is limited.
+  Reduction happens recursively for each value.
+  If a value is quoted, the structure as is will be value.
+  """
   alias RuleEngine.Types.Token
   alias RuleEngine.Mutable
 
+  @doc """
+  Tokens reduce to other tokens, if it is a list, then it executes the
+  first element as a function with the other elements as values to the
+  function.
+  When a normal function, each paremeter will be reduced recursively.
+  When a macro function, each parameter will be given as is.
+  """
+  @spec reduce(Token.t) :: Token.t
   def reduce(%Token{type: :list, macro: false} = tok) do
     reduce_list(tok.value)
   end
@@ -14,7 +27,7 @@ defmodule RuleEngine.Reduce do
       {tok, state}
     end
   end
-  def reduce_list([f | params]) do
+  defp reduce_list([f | params]) do
     runfunc = fn tok ->
       arbitrary = tok.value
       case tok do
@@ -56,10 +69,15 @@ defmodule RuleEngine.Reduce do
       {result, state4}
     end
   end
-  def reduce_list(bad) do
+  defp reduce_list(bad) do
     throw {:not_implemented, bad}
   end
 
+  @doc """
+  Look up a symbol from the environment.
+  Will throw if no value is found.
+  """
+  @spec resolve_symbol(Token.t) :: Token.t
   def resolve_symbol(%Token{value: sy} = sy_tok) do
     fn state ->
       tok = Mutable.env_lookup(state, sy)
@@ -71,6 +89,13 @@ defmodule RuleEngine.Reduce do
     end
   end
 
+  @doc """
+  Adds a reduction statistic to the execution context.
+
+  Will throw `:max_reductions_reached` when the executions exceed
+  the maximum.
+  """
+  @spec add_reduction() :: (Mutable.t -> {nil, Mutable.t})
   def add_reduction do
     fn state ->
       state2 = Mutable.reductions_inc(state)

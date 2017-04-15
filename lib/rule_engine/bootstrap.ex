@@ -1,9 +1,45 @@
 defmodule RuleEngine.Bootstrap do
+  @moduledoc """
+  To get your functions up and running, Bootstrap comes with many
+  handy functions to build your environment quickly.
+
+  State modifying functions are more clunky and not recommended unless you
+  are making type sensitive macros.
+
+  To make a basic state altering function, you can return
+  ```
+  alias RuleEngine.Bootstrap
+  Bootstrap.state_fun(fn ->
+    fn state ->
+      {return_value_here, state}
+    end
+  end, [])
+  ```
+
+  To make a basic pre-typed and abstracted function, you can return
+  ```
+  alias RuleEngine.Bootstrap
+  Bootstrap.mkfun(fn x, y ->
+    x <> y
+  end, [:string, :string])
+  ```
+  where the second parameter is a list of the parameters and types.
+  The return type is automatically converted from a native type:
+  * number
+  * string
+  * boolean
+  * nil
+  * list (with any element being a supported type)
+  * dict / map (with any key or value being a supported type)
+  
+  """
   alias RuleEngine.Mutable
   alias RuleEngine.Reduce
   import RuleEngine.Types
   alias RuleEngine.Types.Token
 
+  @doc "Bootstrap environment with basic functions"
+  @spec bootstrap_environment() :: %{}
   def bootstrap_environment do
     %{
       outer: nil,
@@ -64,11 +100,18 @@ defmodule RuleEngine.Bootstrap do
     }
   end
 
+  @doc "Wraps the bootstrap environment in an execution context"
+  @spec bootstrap_mutable() :: Mutable.t
   def bootstrap_mutable do
     %Mutable{
       environment: bootstrap_environment()
     }
   end
+
+  @doc """
+  Converts an elixir / erlang data structure to a Token.
+  """
+  @spec convert(any) :: Token.t
   def convert({:error, err}), do: throw err
   def convert(%Token{} = res), do: res
   def convert(res) when is_boolean(res), do: symbol(res)
@@ -89,7 +132,7 @@ defmodule RuleEngine.Bootstrap do
   def convert(res) when is_function(res), do: function(res)
   def convert(res), do: hack(res)
 
-  def simple_fun(fun) do
+  defp simple_fun(fun) do
     lambda = fn args ->
       largs = length(args)
       case args do
@@ -102,11 +145,23 @@ defmodule RuleEngine.Bootstrap do
     wrap_state(lambda)
   end
 
-  def simple_macro(fun) do
-    macro(fn args ->
-      fun.(args)
-    end)
-  end
+
+  @type fun_type
+    :: :boolean
+    | :any
+    | :number
+    | :string
+    | :atom
+    | :dict
+    | :list
+    | {:same, fun_type}
+  @doc """
+  This is a function wrapper to check the types on the AST inputs.
+  It may also unwrap the value when `:convert` is given.
+
+  `:naked` means not to unwrap tokens to their plain values
+  """
+  @spec mk_core_fun(Fun, [fun_type], :naked | :convert) :: Fun
   def mk_core_fun(fun, types, conversion) do
     fn args ->
       ltypes = length(types)
@@ -153,14 +208,24 @@ defmodule RuleEngine.Bootstrap do
       end
     end
   end
+
+  @doc "Makes a function that can be called with unwrapped typed values"
+  @spec mkfun(Fun, [fun_type]) :: Token.t
   def mkfun(fun, types) do
     lambda = mk_core_fun(fun, types, :convert)
     wrap_state(lambda)
   end
+
+  @doc """
+  Makes a function that can modify state which can be called
+  with wrapped typed values
+  """
+  @spec state_fun(Fun, [fun_type]) :: Token.t
   def state_fun(fun, types) do
     lambda = mk_core_fun(fun, types, :naked)
     function(lambda)
   end
+
   defp exec_fun(fun, typed_args) do
     args = Enum.map(typed_args, fn %Token{value: v} ->
       v
@@ -219,7 +284,7 @@ defmodule RuleEngine.Bootstrap do
   end
 
   defp and_fun do
-    simple_macro(fn ast ->
+    macro(fn ast ->
       fn state ->
         {res, state_final} = Enum.reduce_while(
           ast,
@@ -239,7 +304,7 @@ defmodule RuleEngine.Bootstrap do
   end
 
   defp or_fun do
-    simple_macro(fn ast ->
+    macro(fn ast ->
       fn state ->
         {res, state_final} = Enum.reduce_while(
           ast,
@@ -258,8 +323,8 @@ defmodule RuleEngine.Bootstrap do
     end)
   end
 
-  def map_fun do
-    simple_macro(fn ast ->
+  defp map_fun do
+    macro(fn ast ->
       case ast do
         [collection, fun] ->
           fn state ->
@@ -304,8 +369,8 @@ defmodule RuleEngine.Bootstrap do
     {as_dict, state2}
   end
 
-  def reduce_fun do
-    simple_macro(fn ast ->
+  defp reduce_fun do
+    macro(fn ast ->
       case ast do
         [collection, acc, fun] ->
           fn state ->
@@ -375,13 +440,13 @@ defmodule RuleEngine.Bootstrap do
   end
 
   # Macros
-  def do_fun do
-    simple_macro(fn ast ->
+  defp do_fun do
+    macro(fn ast ->
       lastReduce(ast)
     end)
   end
-  def quote_fun do
-    simple_macro(fn ast ->
+  defp quote_fun do
+    macro(fn ast ->
       case ast do
         [single] ->
           fn state ->
@@ -391,8 +456,8 @@ defmodule RuleEngine.Bootstrap do
       end
     end)
   end
-  def if_fun do
-    simple_macro(fn ast ->
+  defp if_fun do
+    macro(fn ast ->
       case ast do
         [condition, true_ast, false_ast] ->
           fn state ->
@@ -413,8 +478,8 @@ defmodule RuleEngine.Bootstrap do
       end
     end)
   end
-  def set_fun do
-    simple_macro(fn ast ->
+  defp set_fun do
+    macro(fn ast ->
       case ast do
         [sy, val] ->
           fn state ->
@@ -431,8 +496,8 @@ defmodule RuleEngine.Bootstrap do
       end
     end)
   end
-  def let_fun do
-    simple_macro(fn ast ->
+  defp let_fun do
+    macro(fn ast ->
       case ast do
         [bindings, body] ->
           case bindings do
@@ -451,8 +516,8 @@ defmodule RuleEngine.Bootstrap do
       end
     end)
   end
-  def lambda_fun do
-    simple_macro(fn ast ->
+  defp lambda_fun do
+    macro(fn ast ->
       case ast do
         [bindings, body] ->
           case bindings do
@@ -501,8 +566,8 @@ defmodule RuleEngine.Bootstrap do
       end
     end)
   end
-  def def_fun do
-    simple_macro(fn ast ->
+  defp def_fun do
+    macro(fn ast ->
       case ast do
         [identifier, body] ->
           fn state ->
@@ -526,8 +591,8 @@ defmodule RuleEngine.Bootstrap do
     end)
   end
 
-  def apply_fun do
-    simple_macro(fn ast ->
+  defp apply_fun do
+    macro(fn ast ->
       case ast do
         [identifier, args] ->
           fn state ->
@@ -593,27 +658,37 @@ defmodule RuleEngine.Bootstrap do
     end
   end
 
-  def zip_bias_left([], _), do: []
-  def zip_bias_left([head | rest], []) do
+  defp zip_bias_left([], _), do: []
+  defp zip_bias_left([head | rest], []) do
     [{head, nil} | zip_bias_left(rest, [])]
   end
-  def zip_bias_left([headk | restk], [headv | restv]) do
+  defp zip_bias_left([headk | restk], [headv | restv]) do
     [{headk, headv} | zip_bias_left(restk, restv)]
   end
 
   # Errors
+  @doc "Prepares an arity error"
+  @spec err_arity(integer, integer) :: tuple
   def err_arity(expected, actual) do
     {:arity_mismatch, expected, actual}
   end
+  @doc "Prepares a type error"
+  @spec err_type(:same, atom, atom) ::tuple
   def err_type(:same, ref_ty, t) do
     {:type_mismatch, :same, ref_ty, t}
   end
+  @spec err_type(atom, atom, Token.t) :: tuple
   def err_type(ref_ty, t, val) do
     {:type_mismatch, ref_ty, t, val}
   end
+  @doc "Prepares a type error"
+  @spec err_type(atom, atom) :: tuple
   def err_type(ref_ty, t) do
     {:type_mismatch, ref_ty, t}
   end
+
+  @doc "Prepares an atom not found error"
+  @spec err_no_atom(Token.t) :: tuple
   def err_no_atom(atom_ref) do
     {:no_atom_found, atom_ref}
   end

@@ -1,4 +1,5 @@
 defmodule Mix.Tasks.RuleEngine.Repl do
+  @moduledoc false
   use Mix.Task
   import RuleEngine.LISP
 

@@ -41,22 +41,6 @@ defmodule RuleEngineMutableTest do
     assert result == val_after
   end
 
-  test "mutable: atom swap!" do
-    val_before = :secret1
-    val_after = :secret2
-    atom_key = 1
-    mut_before = %Mutable{
-      atoms: %{atom_key => val_before}
-    }
-    mut_expected = %Mutable{
-      atoms: %{atom_key => val_after}
-    }
-    fun = fn _ -> val_after end
-    {mut_after, result} = atom_swap!(mut_before, atom_key, fun)
-    assert mut_expected == mut_after
-    assert result == {:ok, val_after}
-  end
-
   def bootstrap() do
     %{
       outer: nil,
