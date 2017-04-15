@@ -304,4 +304,19 @@ defmodule RuleEngineBootstrapTest do
     assert res == n1
     assert state.environment.vals[key] == n1
   end
+
+  test "bootstrap: apply" do
+    app_fun = gfun("apply")
+    assert number(5) == execute(app_fun, [
+      symbol("+"),
+      list([
+        symbol("quote"),
+        list([
+          number(1),
+          number(1),
+          number(3)
+          ])
+        ])
+      ])
+  end
 end

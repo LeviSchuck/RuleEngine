@@ -45,6 +45,7 @@ defmodule RuleEngine.Bootstrap do
         "let" => let_fun(),
         "fn" => lambda_fun(),
         "def" => def_fun(),
+        "apply" => apply_fun(),
         # Built in symbols
         "true" => symbol(true),
         true => symbol(true),
@@ -507,6 +508,24 @@ defmodule RuleEngine.Bootstrap do
             state4 = Mutable.env_set(state3, ident_ref.value, body_val)
             {body_val, state4}
           end
+        _ -> throw err_arity(2, length(ast))
+      end
+    end)
+  end
+
+  def apply_fun do
+    simple_macro(fn ast ->
+      case ast do
+        [identifier, args] ->
+          fn state ->
+            {arg_list, state2} = Reduce.reduce(args).(state)
+            case arg_list do
+              %Token{type: :list} -> nil
+              _ -> throw err_type(:list, arg_list.type, arg_list)
+            end
+            Reduce.reduce(list([identifier | arg_list.value])).(state2)
+          end
+
         _ -> throw err_arity(2, length(ast))
       end
     end)

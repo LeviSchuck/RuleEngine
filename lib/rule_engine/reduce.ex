@@ -56,8 +56,8 @@ defmodule RuleEngine.Reduce do
       {result, state4}
     end
   end
-  def reduce_list(_ast) do
-    throw :not_implemented
+  def reduce_list(bad) do
+    throw {:not_implemented, bad}
   end
 
   def resolve_symbol(%Token{value: sy} = sy_tok) do
@@ -77,16 +77,19 @@ defmodule RuleEngine.Reduce do
     end
   end
 
-  def list_reduce([]) do
+  defp list_reduce([]) do
     fn state ->
       {[], state}
     end
   end
-  def list_reduce([head | tail]) do
+  defp list_reduce([head | tail]) do
     fn state ->
       {v, state2} = reduce(head).(state)
       {r, state3} = list_reduce(tail).(state2)
       {[v | r], state3}
     end
+  end
+  defp list_reduce(bad) do
+    throw {:not_implemented, bad}
   end
 end
