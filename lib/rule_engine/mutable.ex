@@ -5,6 +5,7 @@ defmodule RuleEngine.Mutable do
     environment: %{},
     environment_id: 1,
     reductions: 0,
+    max_reductions: :infinite,
   ]
 
   def atom_new(mutable, value) do
@@ -137,6 +138,16 @@ defmodule RuleEngine.Mutable do
   def reductions_inc(mutable) do
     update_in(mutable, [Lens.key(:reductions)], fn x ->
       x + 1
+    end)
+  end
+  def reductions_reset(mutable) do
+    update_in(mutable, [Lens.key(:reductions)], fn _ ->
+      0
+    end)
+  end
+  def reductions_max(mutable, maximum) do
+    update_in(mutable, [Lens.key(:max_reductions)], fn _ ->
+      maximum
     end)
   end
 end

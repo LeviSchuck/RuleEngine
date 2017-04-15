@@ -73,7 +73,15 @@ defmodule RuleEngine.Reduce do
 
   def add_reduction do
     fn state ->
-      {nil, Mutable.reductions_inc(state)}
+      state2 = Mutable.reductions_inc(state)
+      case state.max_reductions do
+        num when is_number(num) ->
+          if state.reductions > num do
+            throw :max_reductions_reached
+          end
+        _ -> nil
+      end
+      {nil, state2}
     end
   end
 

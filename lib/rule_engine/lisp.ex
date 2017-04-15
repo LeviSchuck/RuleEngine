@@ -30,7 +30,18 @@ defmodule RuleEngine.LISP do
               fn state ->
                 {Types.number(state.reductions), state}
               end
-            end, [])
+            end, []),
+          "debug_set_max_reductions" =>
+            Bootstrap.state_fun(fn x ->
+              fn state ->
+                case x do
+                  %Token{type: :symbol, value: "infinite"} ->
+                    {Types.symbol(nil), Mutable.reductions_max(state, :infinite)}
+                  %Token{type: :number, value: num} ->
+                    {Types.symbol(nil), Mutable.reductions_max(state, num)}
+                end
+              end
+            end, [:number]),
         })
   end
   def main do
@@ -51,6 +62,9 @@ defmodule RuleEngine.LISP do
         IO.puts("Error: #{desc}")
         loop(mutable)
       {:end} -> nil
+      {:end, message} ->
+        IO.puts("Ending: #{message}")
+        nil
       {:ignore} -> loop(mutable)
       what ->
         IO.puts("Unexpected: #{inspect what}")
@@ -210,5 +224,7 @@ defmodule RuleEngine.LISP do
       {:error, "Expected #{ref_ty} as argument type, but got #{t}: #{print(val)}"}
     {:no_atom_found, atom_ref} ->
       {:error, {:no_atom_found, atom_ref}}
+    :max_reductions_reached ->
+      {:end, "Maximum execution reached, ending."}
   end
 end
