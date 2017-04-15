@@ -57,3 +57,45 @@ defmodule RuleEngine.Types do
   defp mkm(val), do: %Token{type: :function, macro: true, value: val}
 
 end
+
+defimpl Inspect, for: RuleEngine.Types.Token do
+  alias RuleEngine.Types.Token
+  import Inspect.Algebra
+
+  def inspect(%Token{type: :number} = tok, opts) do
+    to_doc(tok.value, opts)
+  end
+  def inspect(%Token{type: :symbol} = tok, opts) do
+    cond do
+      is_binary(tok.value) -> tok.value
+      true -> to_doc(tok.value, opts)
+    end
+  end
+  def inspect(%Token{type: :string} = tok, opts) do
+    to_doc(tok.value, opts)
+  end
+  def inspect(%Token{type: :dict} = tok, opts) do
+    fun = fn {k, v}, _ ->
+      concat([to_doc(k, opts), " => ", to_doc(v, opts)])
+    end
+    surround_many("%{", Map.to_list(tok.value), "}", opts, fun, ",")
+  end
+  def inspect(%Token{type: :function, macro: true}, _opts) do
+    "macro->"
+  end
+  def inspect(%Token{type: :function}, _opts) do
+    "fn->"
+  end
+  def inspect(%Token{type: :hack} = tok, opts) do
+    to_doc(tok.value, opts)
+  end
+  def inspect(%Token{type: :atom} = tok, opts) do
+    concat(["#atom_", to_doc(tok.value, opts)])
+  end
+  def inspect(%Token{type: :list} = tok, opts) do
+    fun = fn v, opt ->
+      to_doc(v, opt)
+    end
+    surround_many("(", tok.value, ")", opts, fun, "")
+  end
+end

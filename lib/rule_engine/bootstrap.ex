@@ -280,19 +280,25 @@ defmodule RuleEngine.Bootstrap do
     end)
   end
   defp map_fun_list(fun_ref, col_ref, state) do
-    {res, state2} = Enum.map_reduce(col_ref.value, state, fn col, s ->
-      {val, s2} = Reduce.reduce(list([fun_ref, col])).(s)
-      {val, s2}
-    end)
+    {res, state2} = Enum.map_reduce(
+      col_ref.value,
+      state,
+      fn col, s ->
+        {val, s2} = Reduce.reduce(list([fun_ref, col])).(s)
+        {val, s2}
+      end)
     res_list = res
       |> list()
     {res_list, state2}
   end
   defp map_fun_dict(fun_ref, col_ref, state) do
-    {res, state2} = Enum.map_reduce(col_ref.value, state, fn {k_col, v_col}, s ->
-      {val, s2} = Reduce.reduce(list([fun_ref, k_col, v_col])).(s)
-      {{k_col, val}, s2}
-    end)
+    {res, state2} = Enum.map_reduce(
+      col_ref.value,
+      state,
+      fn {k_col, v_col}, s ->
+        {val, s2} = Reduce.reduce(list([fun_ref, k_col, v_col])).(s)
+        {{k_col, val}, s2}
+      end)
     as_dict = Enum.into(res, %{})
       |> dict()
     {as_dict, state2}
@@ -310,8 +316,10 @@ defmodule RuleEngine.Bootstrap do
             end
             {col_ref, state3} = Reduce.reduce(collection).(state2)
             case col_ref do
-              %Token{type: :list} -> reduce_fun_list(fun_ref, col_ref, acc, state3)
-              %Token{type: :dict} -> reduce_fun_dict(fun_ref, col_ref, acc, state3)
+              %Token{type: :list} ->
+                reduce_fun_list(fun_ref, col_ref, acc, state3)
+              %Token{type: :dict} ->
+                reduce_fun_dict(fun_ref, col_ref, acc, state3)
               _ -> throw err_type([:list, :dict], col_ref.type, col_ref)
             end
           end
@@ -320,20 +328,25 @@ defmodule RuleEngine.Bootstrap do
   end
 
   defp reduce_fun_list(fun_ref, col_ref, acc, state) do
-    {res, state2} = Enum.reduce(col_ref.value, {acc, state}, fn col, {a, s} ->
-      {next_a, s2} = Reduce.reduce(list([fun_ref, col, a])).(s)
-      {next_a, s2}
-    end)
+    {res, state2} = Enum.reduce(
+      col_ref.value,
+      {acc, state},
+      fn col, {a, s} ->
+        {next_a, s2} = Reduce.reduce(list([fun_ref, col, a])).(s)
+        {next_a, s2}
+      end)
     {res, state2}
   end
   defp reduce_fun_dict(fun_ref, col_ref, acc, state) do
-    {res, state2} = Enum.reduce(col_ref.value, {acc, state}, fn {k_col, v_col}, {a, s} ->
-      {next_a, s2} = Reduce.reduce(list([fun_ref, k_col, v_col, a])).(s)
-      {next_a, s2}
-    end)
+    {res, state2} = Enum.reduce(
+      col_ref.value,
+      {acc, state},
+      fn {k_col, v_col}, {a, s} ->
+        {next_a, s2} = Reduce.reduce(list([fun_ref, k_col, v_col, a])).(s)
+        {next_a, s2}
+      end)
     {res, state2}
   end
-
 
   defp make_atom(value) do
     fn state ->

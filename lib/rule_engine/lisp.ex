@@ -1,4 +1,13 @@
 defmodule RuleEngine.LISP do
+  @moduledoc """
+  RuleEngine Execution and AST most closely match that of LISP.
+  To render LISP expressions from strings to the AST, use
+  `read/1`.
+  To convert an AST to a string, you can just use inspect.
+  To evaluate an AST with an environment and get back an AST or an error,
+  use `eval/2`.
+
+  """
   alias RuleEngine.Bootstrap
   alias RuleEngine.Mutable
   alias RuleEngine.Types
@@ -7,45 +16,59 @@ defmodule RuleEngine.LISP do
   def mk_mut do
     Bootstrap.bootstrap_mutable()
       |> Mutable.env_new(%{
-          "debug_atom" =>
-              Bootstrap.state_fun(fn x ->
-                fn state ->
-                  {Types.atom(x.value), state}
-                end
-              end, [:number]),
-          "debug_get_environment" =>
-            Bootstrap.state_fun(fn ->
-              fn state ->
-                {Types.dict(state.environment), state}
-              end
-            end, []),
-          "debug_get_atoms" =>
-            Bootstrap.state_fun(fn ->
-              fn state ->
-                {Types.dict(state.atoms), state}
-              end
-            end, []),
-          "debug_reductions" =>
-            Bootstrap.state_fun(fn ->
-              fn state ->
-                {Types.number(state.reductions), state}
-              end
-            end, []),
-          "debug_set_max_reductions" =>
-            Bootstrap.state_fun(fn x ->
-              fn state ->
-                case x do
-                  %Token{type: :symbol, value: "infinite"} ->
-                    {Types.symbol(nil), Mutable.reductions_max(state, :infinite)}
-                  %Token{type: :number, value: num} ->
-                    {Types.symbol(nil), Mutable.reductions_max(state, num)}
-                end
-              end
-            end, [:number]),
+          "debug_atom" => debug_atom(),
+          "debug_get_environment" => debug_get_environment(),
+          "debug_get_atoms" => debug_get_atoms(),
+          "debug_reductions" => debug_reductions(),
+          "debug_set_max_reductions" => debug_set_max_reductions(),
         })
   end
   def main do
     loop(mk_mut())
+  end
+  def main(environment) do
+    mut = Mutable.env_new(mk_mut(), environment)
+    loop(mut)
+  end
+  defp debug_atom do
+    Bootstrap.state_fun(fn x ->
+      fn state ->
+        {Types.atom(x.value), state}
+      end
+    end, [:number])
+  end
+  defp debug_get_environment do
+    Bootstrap.state_fun(fn ->
+      fn state ->
+        {Types.dict(state.environment), state}
+      end
+    end, [])
+  end
+  defp debug_get_atoms do
+    Bootstrap.state_fun(fn ->
+      fn state ->
+        {Types.dict(state.atoms), state}
+      end
+    end, [])
+  end
+  defp debug_set_max_reductions do
+    Bootstrap.state_fun(fn x ->
+      fn state ->
+        case x do
+          %Token{type: :symbol, value: "infinite"} ->
+            {Types.symbol(nil), Mutable.reductions_max(state, :infinite)}
+          %Token{type: :number, value: num} ->
+            {Types.symbol(nil), Mutable.reductions_max(state, num)}
+        end
+      end
+    end, [:number])
+  end
+  defp debug_reductions do
+    Bootstrap.state_fun(fn ->
+      fn state ->
+        {Types.number(state.reductions), state}
+      end
+    end, [])
   end
   defp loop(mutable) do
     IO.write(:stdio, "user> ")
@@ -129,7 +152,12 @@ defmodule RuleEngine.LISP do
     end
     def parse_map do
       between(string("%{"), many(lazy(fn ->
-        sequence([parse_value(), option(string("=>")), parse_value(), option(char(","))])
+        sequence([
+          parse_value(),
+          option(string("=>")),
+          parse_value(),
+          option(char(","))
+          ])
       end))
       |> tol()
       |> pipe(fn [xs] ->
@@ -165,40 +193,9 @@ defmodule RuleEngine.LISP do
         end
     end
   end
-  def print(%Token{type: :list} = tok) do
-    ["(", Enum.join(Enum.map(tok.value, &print/1), " "), ")"]
-  end
-  def print(%Token{type: :number} = tok) do
-    inspect(tok.value)
-  end
-  def print(%Token{type: :symbol} = tok) do
-    cond do
-      is_binary(tok.value) -> tok.value
-      true -> inspect(tok.value)
-    end
-  end
-  def print(%Token{type: :string} = tok) do
-    inspect(tok.value)
-  end
-  def print(%Token{type: :dict} = tok) do
-    ["%{", Enum.map(tok.value, fn {k, v} ->
-      [print(k), " => ", print(v)]
-    end) |> Enum.join(", "), "}"]
-  end
-  def print(%Token{type: :function, macro: true}) do
-    "macro->"
-  end
-  def print(%Token{type: :function}) do
-    "fn->"
-  end
-  def print(%Token{type: :hack} = tok) do
-    inspect(tok.value)
-  end
-  def print(%Token{type: :atom} = tok) do
-    "#atom_#{tok.value}"
-  end
+
   def print(result) do
-    "Unsupported?: #{inspect result}"
+    inspect(result)
   end
 
   def eval(ast, mutable) do
