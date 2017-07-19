@@ -134,4 +134,26 @@ This should cause an error
   test "double quoting parses" do
     assert_ok(parse("(hello ''keyword)"))
   end
+
+  test "double document" do
+    doc = """
+(thing thang)
+; comments
+
+; empty space
+(mumbo jumbo)
+    """
+    assert_ok(parse_document(doc))
+  end
+
+  test "parse document without document" do
+    doc = """
+(thing thang)
+; comments
+
+; empty space
+(mumbo jumbo)
+    """
+    assert_error(parse(doc))
+  end
 end

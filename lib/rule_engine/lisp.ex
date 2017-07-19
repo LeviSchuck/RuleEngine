@@ -76,6 +76,22 @@ defmodule RuleEngine.LISP do
   end
 
   @doc """
+  To parse a LISP document to an AST, use `parse_document/1`.
+  A successfully parsed AST does not mean that the AST
+  will evaluate without error.
+  """
+  @spec parse_document(String.t)
+    :: {:ok, Token.t}
+    | {:error, tuple}
+  def parse_document(text) do
+    case Combine.parse(text, Parser.parse_document()) do
+      [x] -> {:ok, x}
+      {:error, expected} -> {:error, {:parse_error, expected}}
+      res -> res
+    end
+  end
+
+  @doc """
   To evaluate an AST within an execution context, provide the root Token
   (likely a list) and the context.
   If you don't have a context to use, you can use
