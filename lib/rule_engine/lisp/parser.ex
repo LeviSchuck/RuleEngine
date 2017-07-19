@@ -87,9 +87,11 @@ defmodule RuleEngine.LISP.Parser do
   def parse_list do
     pipe([
       char("("),
-      lazy(fn -> many(parse_value()) end),
+      parse_dead_content(),
+      lazy(fn -> sep_by(parse_value_direct(), parse_some_dead_content()) end),
+      parse_dead_content(),
       char(")")
-      ], fn [_, v, _] ->
+      ], fn [_, _, v, _, _] ->
         Types.list(v)
       end)
   end
@@ -130,6 +132,12 @@ defmodule RuleEngine.LISP.Parser do
   end
   def parse_dead_content(p \\ nil) do
     p |> many(first_of([
+      whitespace(),
+      parse_comment(),
+      ]))
+  end
+  def parse_some_dead_content(p \\ nil) do
+    p |> many1(first_of([
       whitespace(),
       parse_comment(),
       ]))

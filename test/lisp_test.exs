@@ -156,4 +156,8 @@ This should cause an error
     """
     assert_error(parse(doc))
   end
+
+  test "parse jumbled number fails" do
+    assert_error(parse("(123a5 34b98)"))
+  end
 end
