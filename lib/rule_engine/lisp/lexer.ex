@@ -205,15 +205,14 @@ defmodule RuleEngine.LISP.Lexer do
   def lexer_whitespace(input, state) do
     lexer_whitespace(input, state, state)
   end
+
   def lexer_whitespace(input, first_state, state) do
-    first = String.first(input)
-    rest = String.slice(input, 1..-1)
     token = {:whitespace, first_state.line, first_state.column}
-    line = case first do
-      "\n" -> state.line + 1
-      _ -> state.line
+    {rest, line, column} = case input do
+      <<"\r\n", rest::binary>> -> {rest, state.line + 1, 0}
+      <<"\n", rest::binary>> -> {rest, state.line + 1, 0}
+      _ -> {String.slice(input, 1..-1), state.line, state.column + 1}
     end
-    column = state.column + 1
     next_state = %{state | line: line, column: column}
     case rest do
       "" ->

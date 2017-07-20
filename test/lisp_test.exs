@@ -146,6 +146,11 @@ This should cause an error
     assert_ok(parse_document(doc))
   end
 
+  test "document with string and \\r\\n" do
+    doc = "(hello)\r\n32\r\n;comment\r\n;comment\r\n\r\n(\"text\")\r\n; comment"
+    assert_ok(parse_document(doc))
+  end
+
   test "parse document without document" do
     doc = """
 (thing thang)

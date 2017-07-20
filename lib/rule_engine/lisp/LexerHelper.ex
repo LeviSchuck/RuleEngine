@@ -16,7 +16,9 @@ defmodule RuleEngine.LISP.LexerHelper do
   defmacro is_whitespace(x) do
     quote do
       " " == unquote(x) or
+      "\r" == unquote(x) or
       "\n" == unquote(x) or
+      "\r\n" == unquote(x) or
       "\r" == unquote(x) or
       "\t" == unquote(x)
     end
