@@ -31,7 +31,7 @@ defmodule RuleEngine.Bootstrap do
   * nil
   * list (with any element being a supported type)
   * dict / map (with any key or value being a supported type)
-  
+
   """
   alias RuleEngine.Mutable
   alias RuleEngine.Reduce
@@ -82,6 +82,7 @@ defmodule RuleEngine.Bootstrap do
         "fn" => lambda_fun(),
         "def" => def_fun(),
         "apply" => apply_fun(),
+        "make-dict" => dict_fun(),
         # Built in symbols
         "true" => symbol(true),
         true => symbol(true),
@@ -587,6 +588,27 @@ defmodule RuleEngine.Bootstrap do
             {body_val, state4}
           end
         _ -> throw err_arity(2, length(ast))
+      end
+    end)
+  end
+  defp dict_fun_consumer([], dict, state), do: {dict, state}
+  defp dict_fun_consumer([_], _, _) do
+    throw err_arity(2, 1)
+  end
+  defp dict_fun_consumer([k, v | rest], dict, state) do
+    {k_value, next_state} = Reduce.reduce(k).(state)
+    {v_value, next_state} = Reduce.reduce(v).(next_state)
+    dict_fun_consumer(rest, Map.put(dict, k_value, v_value), next_state)
+  end
+  defp dict_fun do
+    macro(fn ast ->
+      len = length(ast)
+      expected = (Integer.floor_div(len, 2)) * 2
+      if len != expected do
+        throw err_arity(expected, length(ast))
+      end
+      fn state ->
+        dict_fun_consumer(ast, %{}, state)
       end
     end)
   end

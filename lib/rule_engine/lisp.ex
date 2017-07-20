@@ -68,7 +68,7 @@ defmodule RuleEngine.LISP do
     :: {:ok, Token.t}
     | {:error, tuple}
   def parse(text) do
-    case Combine.parse(text, Parser.parse_root()) do
+    case Parser.parse_exec_root(text) do
       [x] -> {:ok, x}
       {:error, expected} -> {:error, {:parse_error, expected}}
       res -> res
@@ -84,7 +84,7 @@ defmodule RuleEngine.LISP do
     :: {:ok, Token.t}
     | {:error, tuple}
   def parse_document(text) do
-    case Combine.parse(text, Parser.parse_document()) do
+    case Parser.parse_exec_document(text) do
       [x] -> {:ok, x}
       {:error, expected} -> {:error, {:parse_error, expected}}
       res -> res
