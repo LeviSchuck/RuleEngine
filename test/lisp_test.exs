@@ -1,6 +1,5 @@
 defmodule RuleEngineLispTest do
   use ExUnit.Case
-  import RuleEngine.LISP
   require Logger
 
   @moduletag timeout: 500
@@ -10,6 +9,9 @@ defmodule RuleEngineLispTest do
 
   def assert_error({:ok, _}), do: assert false, "Should not have parsed"
   def assert_error(_), do: nil
+
+  def parse(v), do: RuleEngine.parse_lisp_value(v, :test)
+  def parse_document(v), do: RuleEngine.parse_lisp(v, :test)
 
 
   test "hello world" do

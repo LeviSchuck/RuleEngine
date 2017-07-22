@@ -29,7 +29,22 @@ defmodule RuleEngine.Types do
       value: nil,
       meta: nil,
       macro: false,
-      env: nil
+      env: nil,
+      origin: nil,
+    ]
+    @type t :: %__MODULE__{}
+  end
+
+  defmodule Origin do
+    @moduledoc """
+    Origin keeps track on each token where it originated from.
+    It will be quite helpful in a stack trace.
+    """
+
+    defstruct [
+      line: nil,
+      column: nil,
+      source: nil,
     ]
     @type t :: %__MODULE__{}
   end
@@ -87,41 +102,42 @@ defmodule RuleEngine.Types do
   def nil?(_), do: false
 
   @doc "Wraps a map of tokens to tokens"
-  @spec dict(%{}) :: Token.t
-  def dict(%{} = m), do: mk(:dict, m)
+  @spec dict(%{}, Origin.t) :: Token.t
+  def dict(%{} = m, origin \\ %Origin{}), do: mk(:dict, m, origin)
 
   @doc "Wraps a list of tokens"
-  @spec list(list(Token.t)) :: Token.t
-  def list(l) when is_list(l), do: mk(:list, l)
+  @spec list(list(Token.t), Origin.t) :: Token.t
+  def list(l, origin \\ %Origin{}) when is_list(l), do: mk(:list, l, origin)
 
   @doc "Wraps a symbol"
-  @spec symbol(boolean | nil | String.t) :: Token.t
-  def symbol(s)
+  @spec symbol(boolean | nil | String.t, Origin.t) :: Token.t
+  def symbol(s, origin \\ %Origin{})
   when is_boolean(s) or is_nil(s) or is_binary(s),
-    do: mk(:symbol, s)
+    do: mk(:symbol, s, origin)
 
   @doc "Wrap a string"
-  def string(s) when is_binary(s), do: mk(:string, s)
+  @spec string(String.t, Origin.t) :: Token.t
+  def string(s, origin \\ %Origin{}) when is_binary(s), do: mk(:string, s, origin)
 
   @doc "Wrap a number"
-  @spec number(number) :: Token.t
-  def number(n) when is_number(n), do: mk(:number, n)
+  @spec number(number, Origin.t) :: Token.t
+  def number(n, origin \\ %Origin{}) when is_number(n), do: mk(:number, n, origin)
 
   @doc "Wrap a non-macro function"
-  @spec function(Fun) :: Token.t
-  def function(f) when is_function(f), do: mk(:function, f)
+  @spec function(Fun, Origin.t) :: Token.t
+  def function(f, origin \\ %Origin{}) when is_function(f), do: mk(:function, f, origin)
 
   @doc "Wrap a macro-ready function"
-  @spec macro(Fun) :: Token.t
-  def macro(f) when is_function(f), do: mkm(f)
+  @spec macro(Fun, Origin.t) :: Token.t
+  def macro(f, origin \\ %Origin{}) when is_function(f), do: mkm(f, origin)
 
   @doc "Wraps a boolean value in a Token"
-  @spec boolean(boolean) :: Token.t
-  def boolean(b) when is_boolean(b), do: mk(:symbol, b)
+  @spec boolean(boolean, Origin.t) :: Token.t
+  def boolean(b, origin \\ %Origin{}) when is_boolean(b), do: mk(:symbol, b, origin)
 
   @doc "Internal use only"
-  @spec atom(integer) :: Token.t
-  def atom(a), do: mk(:atom, a)
+  @spec atom(integer, Origin.t) :: Token.t
+  def atom(a, origin \\ %Origin{}), do: mk(:atom, a, origin)
 
   @doc """
   Internal use only.
@@ -130,8 +146,8 @@ defmodule RuleEngine.Types do
   in an AST Token. However, it is not to be processed and will likely result
   in a runtime error that needs to be caught.
   """
-  @spec hack(any) :: Token.t
-  def hack(a), do: mk(:hack, a)
+  @spec hack(any, Origin.t) :: Token.t
+  def hack(a, origin), do: mk(:hack, a, origin)
 
   @doc "Adds an environment to a macro function"
   @spec add_closure(Token.t, %{}) :: Token.t
@@ -141,8 +157,11 @@ defmodule RuleEngine.Types do
   @spec value_of(Token.t) :: any
   def value_of(%Token{value: val}), do: val
 
-  defp mk(ty, val), do: %Token{type: ty, value: val}
-  defp mkm(val), do: %Token{type: :function, macro: true, value: val}
+  def mko(source), do: %Origin{source: source}
+  def mko(source, line, column), do: %Origin{source: source, line: line, column: column}
+
+  defp mk(ty, val, origin), do: %Token{type: ty, value: val, origin: origin}
+  defp mkm(val, origin), do: %Token{type: :function, macro: true, value: val, origin: origin}
 end
 
 defimpl Inspect, for: RuleEngine.Types.Token do

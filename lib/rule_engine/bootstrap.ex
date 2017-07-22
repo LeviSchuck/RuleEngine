@@ -9,19 +9,21 @@ defmodule RuleEngine.Bootstrap do
   To make a basic state altering function, you can return
   ```
   alias RuleEngine.Bootstrap
+  alias RuleEngine.Types
   Bootstrap.state_fun(fn ->
     fn state ->
       {return_value_here, state}
     end
-  end, [])
+  end, [], Types.mko(:your_module))
   ```
 
   To make a basic pre-typed and abstracted function, you can return
   ```
   alias RuleEngine.Bootstrap
+  alias RuleEngine.Types
   Bootstrap.mkfun(fn x, y ->
     x <> y
-  end, [:string, :string])
+  end, [:string, :string], Types.mko(:your_module))
   ```
   where the second parameter is a list of the parameters and types.
   The return type is automatically converted from a native type:
@@ -38,6 +40,10 @@ defmodule RuleEngine.Bootstrap do
   import RuleEngine.Types
   alias RuleEngine.Types.Token
 
+  @origin mko(:bootstrap)
+
+  def bootstrap_origin, do: @origin
+
   @doc "Bootstrap environment with basic functions"
   @spec bootstrap_environment() :: %{}
   def bootstrap_environment do
@@ -45,16 +51,16 @@ defmodule RuleEngine.Bootstrap do
       outer: nil,
       vals: %{
         # Comparators
-        "==" => mkfun(fn x, y -> x == y end, [:any, :any]),
-        "!=" => mkfun(fn x, y -> x != y end, [:any, :any]),
-        "<" => mkfun(fn x, y -> x < y end, [:any, :any]),
-        ">" => mkfun(fn x, y -> x > y end, [:any, :any]),
-        "<=" => mkfun(fn x, y -> x <= y end, [:any, :any]),
-        ">=" => mkfun(fn x, y -> x >= y end, [:any, :any]),
+        "==" => mkfun(fn x, y -> x == y end, [:any, :any], @origin),
+        "!=" => mkfun(fn x, y -> x != y end, [:any, :any], @origin),
+        "<" => mkfun(fn x, y -> x < y end, [:any, :any], @origin),
+        ">" => mkfun(fn x, y -> x > y end, [:any, :any], @origin),
+        "<=" => mkfun(fn x, y -> x <= y end, [:any, :any], @origin),
+        ">=" => mkfun(fn x, y -> x >= y end, [:any, :any], @origin),
         # Combinatoral
-        "&&" => mkfun(fn x, y -> x && y end, [:boolean, :boolean]),
-        "||" => mkfun(fn x, y -> x || y end, [:boolean, :boolean]),
-        "++" => mkfun(fn x, y -> x <> y end, [:string, :string]),
+        "&&" => mkfun(fn x, y -> x && y end, [:boolean, :boolean], @origin),
+        "||" => mkfun(fn x, y -> x || y end, [:boolean, :boolean], @origin),
+        "++" => mkfun(fn x, y -> x <> y end, [:string, :string], @origin),
         # Folding Combinatoral operations
         "+" => plus_fun(),
         "-" => minus_fun(),
@@ -64,16 +70,16 @@ defmodule RuleEngine.Bootstrap do
         "map" => map_fun(),
         "reduce" => reduce_fun(),
         # Types
-        "nil?" => simple_fun(&nil?/1),
-        "boolean?" => simple_fun(&boolean?/1),
-        "symbol?" => simple_fun(&symbol?/1),
-        "list?" => simple_fun(&list?/1),
-        "dict?" => simple_fun(&dict?/1),
-        "string?" => simple_fun(&string?/1),
-        "number?" => simple_fun(&number?/1),
-        "function?" => simple_fun(&function?/1),
-        "macro?" => simple_fun(&macro?/1),
-        "atom?" => simple_fun(&atom?/1),
+        "nil?" => simple_fun(&nil?/1, @origin),
+        "boolean?" => simple_fun(&boolean?/1, @origin),
+        "symbol?" => simple_fun(&symbol?/1, @origin),
+        "list?" => simple_fun(&list?/1, @origin),
+        "dict?" => simple_fun(&dict?/1, @origin),
+        "string?" => simple_fun(&string?/1, @origin),
+        "number?" => simple_fun(&number?/1, @origin),
+        "function?" => simple_fun(&function?/1, @origin),
+        "macro?" => simple_fun(&macro?/1, @origin),
+        "atom?" => simple_fun(&atom?/1, @origin),
         # Macros
         "do" => do_fun(),
         "quote" => quote_fun(),
@@ -84,16 +90,16 @@ defmodule RuleEngine.Bootstrap do
         "apply" => apply_fun(),
         "make-dict" => dict_fun(),
         # Built in symbols
-        "true" => symbol(true),
-        true => symbol(true),
-        "false" => symbol(false),
-        false => symbol(false),
-        "nil" => symbol(nil),
-        nil => symbol(nil),
+        "true" => symbol(true, @origin),
+        true => symbol(true, @origin),
+        "false" => symbol(false, @origin),
+        false => symbol(false, @origin),
+        "nil" => symbol(nil, @origin),
+        nil => symbol(nil, @origin),
         # Atom ops
-        "atom" => state_fun(&make_atom/1, [:any]),
-        "deref" => state_fun(&deref_atom/1, [:atom]),
-        "reset!" => state_fun(&reset_atom/2, [:atom, :any]),
+        "atom" => state_fun(&make_atom/1, [:any], @origin),
+        "deref" => state_fun(&deref_atom/1, [:atom], @origin),
+        "reset!" => state_fun(&reset_atom/2, [:atom, :any], @origin),
         # "swap!" => mkfun(???, [:atom, :function])
         "set!" => set_fun(),
       },
@@ -112,38 +118,38 @@ defmodule RuleEngine.Bootstrap do
   @doc """
   Converts an elixir / erlang data structure to a Token.
   """
-  @spec convert(any) :: Token.t
-  def convert({:error, err}), do: throw err
-  def convert(%Token{} = res), do: res
-  def convert(res) when is_boolean(res), do: symbol(res)
-  def convert(nil), do: symbol(nil)
-  def convert(res) when is_number(res), do: number(res)
-  def convert(res) when is_binary(res), do: string(res)
-  def convert(res) when is_map(res) do
+  @spec convert(any, Origin.t) :: Token.t
+  def convert({:error, err}, _), do: throw err
+  def convert(%Token{} = res, _), do: res
+  def convert(res, origin) when is_boolean(res), do: symbol(res, origin)
+  def convert(nil, origin), do: symbol(nil, origin)
+  def convert(res, origin) when is_number(res), do: number(res, origin)
+  def convert(res, origin) when is_binary(res), do: string(res, origin)
+  def convert(res, origin) when is_map(res) do
     Enum.map(res, fn {k, v} ->
-      {convert(k), convert(v)}
+      {convert(k, origin), convert(v, origin)}
     end)
       |> Enum.into(%{})
-      |> dict()
+      |> dict(origin)
   end
-  def convert(res) when is_list(res) do
-    Enum.map(res, &convert/1)
-      |> list()
+  def convert(res, origin) when is_list(res) do
+    Enum.map(res, &convert(&1, origin))
+      |> list(origin)
   end
-  def convert(res) when is_function(res), do: function(res)
-  def convert(res), do: hack(res)
+  def convert(res, origin) when is_function(res), do: function(res, origin)
+  def convert(res, origin), do: hack(res, origin)
 
-  defp simple_fun(fun) do
+  defp simple_fun(fun, origin) do
     lambda = fn args ->
       largs = length(args)
       case args do
         [arg] ->
           fun.(arg)
-            |> convert()
+            |> convert(origin)
         _ -> throw err_arity(1, largs)
       end
     end
-    wrap_state(lambda)
+    wrap_state(lambda, origin)
   end
 
 
@@ -162,8 +168,8 @@ defmodule RuleEngine.Bootstrap do
 
   `:naked` means not to unwrap tokens to their plain values
   """
-  @spec mk_core_fun(Fun, [fun_type], :naked | :convert) :: Fun
-  def mk_core_fun(fun, types, conversion) do
+  @spec mk_core_fun(Fun, [fun_type], :naked | :convert, Origin.t) :: Fun
+  def mk_core_fun(fun, types, conversion, origin) do
     fn args ->
       ltypes = length(types)
       largs = length(args)
@@ -200,7 +206,7 @@ defmodule RuleEngine.Bootstrap do
           case type_check do
             {_, :ok} ->
               case conversion do
-                :convert -> exec_fun(fun, args)
+                :convert -> exec_fun(fun, args, origin)
                 :naked -> apply(fun, args)
               end
             {:error, err} -> throw err
@@ -211,35 +217,36 @@ defmodule RuleEngine.Bootstrap do
   end
 
   @doc "Makes a function that can be called with unwrapped typed values"
-  @spec mkfun(Fun, [fun_type]) :: Token.t
-  def mkfun(fun, types) do
-    lambda = mk_core_fun(fun, types, :convert)
-    wrap_state(lambda)
+  @spec mkfun(Fun, [fun_type], Origin.t) :: Token.t
+  def mkfun(fun, types, origin) do
+    lambda = mk_core_fun(fun, types, :convert, origin)
+    wrap_state(lambda, origin)
   end
 
   @doc """
   Makes a function that can modify state which can be called
   with wrapped typed values
   """
-  @spec state_fun(Fun, [fun_type]) :: Token.t
-  def state_fun(fun, types) do
-    lambda = mk_core_fun(fun, types, :naked)
-    function(lambda)
+  @spec state_fun(Fun, [fun_type], Origin.t) :: Token.t
+  def state_fun(fun, types, origin) do
+    lambda = mk_core_fun(fun, types, :naked, origin)
+    function(lambda, origin)
   end
 
-  defp exec_fun(fun, typed_args) do
+  defp exec_fun(fun, typed_args, origin) do
     args = Enum.map(typed_args, fn %Token{value: v} ->
       v
     end)
     apply(fun, args)
-      |> convert()
+      |> convert(origin)
   end
-  defp wrap_state(lambda) do
+
+  defp wrap_state(lambda, origin) do
     function(fn args ->
       fn state ->
         {lambda.(args), state}
       end
-    end)
+    end, origin)
   end
 
   defp all_type_check(args, type) do
@@ -268,7 +275,7 @@ defmodule RuleEngine.Bootstrap do
         _ -> type_check
       end
     end
-    wrap_state(lambda)
+    wrap_state(lambda, @origin)
   end
   defp plus_fun do
     lambda = fn args ->
@@ -281,7 +288,7 @@ defmodule RuleEngine.Bootstrap do
         _ -> type_check
       end
     end
-    wrap_state(lambda)
+    wrap_state(lambda, @origin)
   end
 
   defp and_fun do
@@ -299,9 +306,9 @@ defmodule RuleEngine.Bootstrap do
               _ -> throw err_type(:boolean, v.type, v)
             end
           end)
-        {symbol(res), state_final}
+        {symbol(res, @origin), state_final}
       end
-    end)
+    end, @origin)
   end
 
   defp or_fun do
@@ -319,9 +326,9 @@ defmodule RuleEngine.Bootstrap do
               _ -> throw err_type(:boolean, v.type, v)
             end
           end)
-        {symbol(res), state_final}
+        {symbol(res, @origin), state_final}
       end
-    end)
+    end, @origin)
   end
 
   defp map_fun do
@@ -343,7 +350,7 @@ defmodule RuleEngine.Bootstrap do
           end
         _ -> throw err_arity(2, length(ast))
       end
-    end)
+    end, @origin)
   end
   defp map_fun_list(fun_ref, col_ref, state) do
     {res, state2} = Enum.map_reduce(
@@ -354,7 +361,7 @@ defmodule RuleEngine.Bootstrap do
         {val, s2}
       end)
     res_list = res
-      |> list()
+      |> list(@origin)
     {res_list, state2}
   end
   defp map_fun_dict(fun_ref, col_ref, state) do
@@ -366,7 +373,7 @@ defmodule RuleEngine.Bootstrap do
         {{k_col, val}, s2}
       end)
     as_dict = Enum.into(res, %{})
-      |> dict()
+      |> dict(@origin)
     {as_dict, state2}
   end
 
@@ -390,7 +397,7 @@ defmodule RuleEngine.Bootstrap do
             end
           end
       end
-    end)
+    end, @origin)
   end
 
   defp reduce_fun_list(fun_ref, col_ref, acc, state) do
@@ -444,7 +451,7 @@ defmodule RuleEngine.Bootstrap do
   defp do_fun do
     macro(fn ast ->
       lastReduce(ast)
-    end)
+    end, @origin)
   end
   defp quote_fun do
     macro(fn ast ->
@@ -455,7 +462,7 @@ defmodule RuleEngine.Bootstrap do
           end
         _ -> throw err_arity(1, length(ast))
       end
-    end)
+    end, @origin)
   end
   defp if_fun do
     macro(fn ast ->
@@ -475,9 +482,24 @@ defmodule RuleEngine.Bootstrap do
               x -> throw err_type(:boolean, :unknown, x)
             end
           end
+        [condition, true_ast] ->
+          fn state ->
+            {result, state2} = Reduce.reduce(condition).(state)
+            case result do
+              %Token{type: :symbol, value: true} ->
+                Reduce.reduce(true_ast).(state2)
+              %Token{type: :symbol, value: false} ->
+                {symbol(nil), state2}
+              %Token{type: :symbol, value: nil} ->
+                {symbol(nil), state2}
+              %Token{} ->
+                throw err_type(:boolean, result.type, result)
+              x -> throw err_type(:boolean, :unknown, x)
+            end
+          end
         _ -> throw err_arity(3, length(ast))
       end
-    end)
+    end, @origin)
   end
   defp set_fun do
     macro(fn ast ->
@@ -495,7 +517,7 @@ defmodule RuleEngine.Bootstrap do
           end
         _ -> throw err_arity(2, length(ast))
       end
-    end)
+    end, @origin)
   end
   defp let_fun do
     macro(fn ast ->
@@ -515,7 +537,7 @@ defmodule RuleEngine.Bootstrap do
           end
         _ -> throw err_arity(2, length(ast))
       end
-    end)
+    end, @origin)
   end
   defp lambda_fun do
     macro(fn ast ->
@@ -565,7 +587,7 @@ defmodule RuleEngine.Bootstrap do
           end
         _ -> throw err_arity(2, length(ast))
       end
-    end)
+    end, @origin)
   end
   defp def_fun do
     macro(fn ast ->
@@ -589,7 +611,7 @@ defmodule RuleEngine.Bootstrap do
           end
         _ -> throw err_arity(2, length(ast))
       end
-    end)
+    end, @origin)
   end
   defp dict_fun_consumer([], dict, state), do: {dict, state}
   defp dict_fun_consumer([_], _, _) do
@@ -610,7 +632,7 @@ defmodule RuleEngine.Bootstrap do
       fn state ->
         dict_fun_consumer(ast, %{}, state)
       end
-    end)
+    end, @origin)
   end
 
   defp apply_fun do
@@ -628,7 +650,7 @@ defmodule RuleEngine.Bootstrap do
 
         _ -> throw err_arity(2, length(ast))
       end
-    end)
+    end, @origin)
   end
 
   # Helpers

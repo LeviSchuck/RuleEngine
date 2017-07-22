@@ -2,6 +2,12 @@ defmodule RuleEngineBootstrapTest do
   use ExUnit.Case
   import RuleEngine.Bootstrap
   import RuleEngine.Types
+  alias RuleEngine.Mutable
+  alias RuleEngine.Reduce
+
+  @o bootstrap_origin()
+  @sfalse symbol(false, @o)
+  @strue symbol(true, @o)
 
   def execute(fun, args) do
     {res, _} = eval(fun, args)
@@ -9,6 +15,11 @@ defmodule RuleEngineBootstrapTest do
   end
   def eval(fun, args) do
     fun.value.(args).(bootstrap_mutable())
+  end
+  def execute_log_errors(fun, args) do
+    mutable = Mutable.errors_log(bootstrap_mutable())
+    {res, _} = Reduce.reduce(list([fun | args])).(mutable)
+    res
   end
   def gfun(key) do
     fun = case bootstrap_environment() do
@@ -19,66 +30,66 @@ defmodule RuleEngineBootstrapTest do
 
   test "bootstrap: ==" do
     fun = gfun("==")
-    assert symbol(true) == execute(fun, [symbol("hello"), symbol("hello")])
-    assert symbol(false) == execute(fun, [symbol("abc"), number(123)])
+    assert @strue == execute(fun, [symbol("hello"), symbol("hello")])
+    assert @sfalse == execute(fun, [symbol("abc"), number(123)])
   end
 
   test "bootstrap: !=" do
     fun = gfun("!=")
-    assert symbol(false) == execute(fun, [symbol("hello"), symbol("hello")])
-    assert symbol(true) == execute(fun, [symbol("abc"), number(123)])
+    assert @sfalse == execute(fun, [symbol("hello"), symbol("hello")])
+    assert @strue == execute(fun, [symbol("abc"), number(123)])
   end
 
   test "bootstrap: <" do
     fun = gfun("<")
-    assert symbol(true) == execute(fun, [number(100), number(200)])
-    assert symbol(false) == execute(fun, [number(100), number(100)])
-    assert symbol(false) == execute(fun, [number(200), number(100)])
+    assert @strue == execute(fun, [number(100), number(200)])
+    assert @sfalse == execute(fun, [number(100), number(100)])
+    assert @sfalse == execute(fun, [number(200), number(100)])
   end
 
   test "bootstrap: >" do
     fun = gfun(">")
-    assert symbol(false) == execute(fun, [number(100), number(200)])
-    assert symbol(false) == execute(fun, [number(100), number(100)])
-    assert symbol(true) == execute(fun, [number(200), number(100)])
+    assert @sfalse == execute(fun, [number(100), number(200)])
+    assert @sfalse == execute(fun, [number(100), number(100)])
+    assert @strue == execute(fun, [number(200), number(100)])
   end
 
   test "bootstrap: <=" do
     fun = gfun("<=")
-    assert symbol(true) == execute(fun, [number(100), number(200)])
-    assert symbol(true) == execute(fun, [number(100), number(100)])
-    assert symbol(false) == execute(fun, [number(200), number(100)])
+    assert @strue == execute(fun, [number(100), number(200)])
+    assert @strue == execute(fun, [number(100), number(100)])
+    assert @sfalse == execute(fun, [number(200), number(100)])
   end
 
   test "bootstrap: >=" do
     fun = gfun(">=")
-    assert symbol(false) == execute(fun, [number(100), number(200)])
-    assert symbol(true) == execute(fun, [number(100), number(100)])
-    assert symbol(true) == execute(fun, [number(200), number(100)])
+    assert @sfalse == execute(fun, [number(100), number(200)])
+    assert @strue == execute(fun, [number(100), number(100)])
+    assert @strue == execute(fun, [number(200), number(100)])
   end
 
   test "bootstrap: &&" do
     fun = gfun("&&")
-    assert symbol(false) == execute(fun, [symbol(false), symbol(false)])
-    assert symbol(false) == execute(fun, [symbol(true), symbol(false)])
-    assert symbol(false) == execute(fun, [symbol(false), symbol(true)])
-    assert symbol(true) == execute(fun, [symbol(true), symbol(true)])
+    assert @sfalse == execute(fun, [@sfalse, @sfalse])
+    assert @sfalse == execute(fun, [@strue, @sfalse])
+    assert @sfalse == execute(fun, [@sfalse, @strue])
+    assert @strue == execute(fun, [@strue, @strue])
   end
 
   test "bootstrap: ||" do
     fun = gfun("||")
-    assert symbol(false) == execute(fun, [symbol(false), symbol(false)])
-    assert symbol(true) == execute(fun, [symbol(true), symbol(false)])
-    assert symbol(true) == execute(fun, [symbol(false), symbol(true)])
-    assert symbol(true) == execute(fun, [symbol(true), symbol(true)])
+    assert @sfalse == execute(fun, [@sfalse, @sfalse])
+    assert @strue == execute(fun, [@strue, @sfalse])
+    assert @strue == execute(fun, [@sfalse, @strue])
+    assert @strue == execute(fun, [@strue, @strue])
   end
 
   test "bootstrap: ++" do
     fun = gfun("++")
-    assert string("") == execute(fun, [string(""), string("")])
-    assert string("a") == execute(fun, [string(""), string("a")])
-    assert string("a") == execute(fun, [string("a"), string("")])
-    assert string("ab") == execute(fun, [string("a"), string("b")])
+    assert string("", @o) == execute(fun, [string(""), string("")])
+    assert string("a", @o) == execute(fun, [string(""), string("a")])
+    assert string("a", @o) == execute(fun, [string("a"), string("")])
+    assert string("ab", @o) == execute(fun, [string("a"), string("b")])
   end
 
   test "bootstrap: +" do
@@ -99,22 +110,22 @@ defmodule RuleEngineBootstrapTest do
 
   test "bootstrap: and" do
     fun = gfun("and")
-    assert symbol(true) == execute(fun, [])
-    assert symbol(true) == execute(fun, [symbol(true)])
-    assert symbol(true) == execute(fun, [symbol(true), symbol(true)])
-    assert symbol(false) == execute(fun, [symbol(true), symbol(false)])
-    assert symbol(false) == execute(fun, [symbol(false), symbol(true)])
-    assert symbol(false) == execute(fun, [symbol(false), symbol(false)])
+    assert @strue == execute(fun, [])
+    assert @strue == execute(fun, [@strue])
+    assert @strue == execute(fun, [@strue, @strue])
+    assert @sfalse == execute(fun, [@strue, @sfalse])
+    assert @sfalse == execute(fun, [@sfalse, @strue])
+    assert @sfalse == execute(fun, [@sfalse, @sfalse])
   end
 
   test "bootstrap: or" do
     fun = gfun("or")
-    assert symbol(false) == execute(fun, [])
-    assert symbol(true) == execute(fun, [symbol(true)])
-    assert symbol(true) == execute(fun, [symbol(true), symbol(true)])
-    assert symbol(true) == execute(fun, [symbol(true), symbol(false)])
-    assert symbol(true) == execute(fun, [symbol(false), symbol(true)])
-    assert symbol(false) == execute(fun, [symbol(false), symbol(false)])
+    assert @sfalse == execute(fun, [])
+    assert @strue == execute(fun, [@strue])
+    assert @strue == execute(fun, [@strue, @strue])
+    assert @strue == execute(fun, [@strue, @sfalse])
+    assert @strue == execute(fun, [@sfalse, @strue])
+    assert @sfalse == execute(fun, [@sfalse, @sfalse])
   end
 
   test "bootstrap: map" do
@@ -124,7 +135,7 @@ defmodule RuleEngineBootstrapTest do
         {number(arg.value + 1), state}
       end
     end)
-    assert list([number(2), number(3)]) == execute(fun, [
+    assert list([number(2), number(3)], @o) == execute(fun, [
       list([
         symbol("quote"),
         list([number(1), number(2)])
@@ -144,59 +155,74 @@ defmodule RuleEngineBootstrapTest do
 
   test "bootstrap: nil?" do
     fun = gfun("nil?")
-    assert symbol(false) == execute(fun, [number(100)])
-    assert symbol(true) == execute(fun, [symbol(nil)])
+    assert @sfalse == execute(fun, [number(100)])
+    assert @strue == execute(fun, [symbol(nil)])
   end
 
   test "bootstrap: boolean?" do
     fun = gfun("boolean?")
-    assert symbol(false) == execute(fun, [number(100)])
-    assert symbol(true) == execute(fun, [symbol(nil)])
-    assert symbol(true) == execute(fun, [symbol(true)])
-    assert symbol(true) == execute(fun, [symbol(false)])
+    assert @sfalse == execute(fun, [number(100)])
+    assert @strue == execute(fun, [symbol(nil)])
+    assert @strue == execute(fun, [@strue])
+    assert @strue == execute(fun, [@sfalse])
   end
 
   test "bootstrap: symbol?" do
     fun = gfun("symbol?")
-    assert symbol(false) == execute(fun, [number(100)])
-    assert symbol(true) == execute(fun, [symbol(nil)])
-    assert symbol(true) == execute(fun, [symbol("cheese")])
+    assert @sfalse == execute(fun, [number(100)])
+    assert @strue == execute(fun, [symbol(nil)])
+    assert @strue == execute(fun, [symbol("cheese")])
   end
 
   test "bootstrap: list?" do
     fun = gfun("list?")
-    assert symbol(false) == execute(fun, [number(100)])
-    assert symbol(true) == execute(fun, [list([])])
-    assert symbol(true) == execute(fun, [list([symbol(nil), number(100)])])
+    assert @sfalse == execute(fun, [number(100)])
+    assert @strue == execute(fun, [list([])])
+    assert @strue == execute(fun, [list([symbol(nil), number(100)])])
   end
 
   test "bootstrap: dict?" do
     fun = gfun("dict?")
-    assert symbol(false) == execute(fun, [number(100)])
-    assert symbol(false) == execute(fun, [list([])])
-    assert symbol(true) == execute(fun, [dict(%{symbol("hello") => number(100)})])
+    assert @sfalse == execute(fun, [number(100)])
+    assert @sfalse == execute(fun, [list([])])
+    assert @strue == execute(fun, [dict(%{symbol("hello") => number(100)})])
   end
 
   test "bootstrap: string?" do
     fun = gfun("string?")
-    assert symbol(false) == execute(fun, [number(100)])
-    assert symbol(false) == execute(fun, [symbol(nil)])
-    assert symbol(false) == execute(fun, [symbol("cheese")])
-    assert symbol(true) == execute(fun, [string("cheese")])
+    assert @sfalse == execute(fun, [number(100)])
+    assert @sfalse == execute(fun, [symbol(nil)])
+    assert @sfalse == execute(fun, [symbol("cheese")])
+    assert @strue == execute(fun, [string("cheese")])
   end
 
   test "bootstrap: macro?" do
     fun = gfun("macro?")
-    assert symbol(true) == execute(fun, [macro(fn x -> x end)])
-    assert symbol(false) == execute(fun, [symbol("hello")])
+    assert @strue == execute(fun, [macro(fn x -> x end)])
+    assert @sfalse == execute(fun, [symbol("hello")])
   end
 
   test "bootstrap: if" do
     fun = gfun("if")
     s1 = string("abc")
     s2 = string("def")
-    assert s1 == execute(fun, [symbol(true), s1, s2])
-    assert s2 == execute(fun, [symbol(false), s1, s2])
+    assert s1 == execute(fun, [@strue, s1, s2])
+    assert s2 == execute(fun, [@sfalse, s1, s2])
+    assert s1 == execute(fun, [@strue, s1])
+    assert symbol(nil) == execute(fun, [@sfalse, s1])
+  end
+
+  test "bootstrap: if bad" do
+    fun = gfun("if")
+    s1 = string("abc")
+    s2 = string("def")
+    assert(try do
+      execute(fun, [number(3), s1, s2])
+      false
+    catch
+      _ -> true
+    end)
+    assert symbol(nil, mko(:error)) == execute_log_errors(fun, [number(3), s1, s2])
   end
 
   test "bootstrap: quote" do
@@ -220,17 +246,17 @@ defmodule RuleEngineBootstrapTest do
 
   test "bootstrap: true" do
     fun = gfun("true")
-    assert fun == symbol(true)
+    assert @strue == fun
   end
 
   test "bootstrap: false" do
     fun = gfun("false")
-    assert fun == symbol(false)
+    assert @sfalse == fun
   end
 
   test "bootstrap: nil" do
     fun = gfun("nil")
-    assert fun == symbol(nil)
+    assert symbol(nil, @o) == fun
   end
 
   test "bootstrap: atom" do

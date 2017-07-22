@@ -15,6 +15,8 @@ defmodule RuleEngine.Mutable do
     environment_id: 1,
     reductions: 0,
     max_reductions: :infinite,
+    errors: [],
+    error_mode: :crash
   ]
   @type t :: %__MODULE__{}
 
@@ -107,6 +109,47 @@ defmodule RuleEngine.Mutable do
   @spec env_ref(t) :: %{}
   def env_ref(mutable) do
     mutable.environment
+  end
+
+  @doc "Get the error mode"
+  @spec error_mode(t) :: :crash | :log | :ignore
+  def error_mode(mutable) do
+    mutable.error_mode
+  end
+
+  @doc "Sets the error mode to crash"
+  @spec errors_crash(t) :: t
+  def errors_crash(mutable) do
+    update_in(mutable, [Lens.key(:error_mode)], fn _ -> :crash end)
+  end
+
+  @doc "Sets the error mode to crash"
+  @spec errors_log(t) :: t
+  def errors_log(mutable) do
+    update_in(mutable, [Lens.key(:error_mode)], fn _ -> :log end)
+  end
+
+  @doc "Sets the error mode to ignore"
+  @spec errors_ignore(t) :: t
+  def errors_ignore(mutable) do
+    update_in(mutable, [Lens.key(:error_mode)], fn _ -> :ignore end)
+  end
+
+  @doc "Handles an error according to the mutable environment setting"
+  @spec handle_error(t, any) :: t
+  def handle_error(_, {:crash, error}), do: throw {:crash, error}
+  def handle_error(mutable, error) do
+    case mutable.error_mode do
+      :crash -> throw {:crash, error}
+      :log -> update_in(mutable, [Lens.key(:errors)], fn st -> [error | st] end)
+      :ignore -> mutable
+    end
+  end
+
+  @doc "Handles an error according to the mutable environment setting"
+  @spec env_get_errors(t) :: [any]
+  def env_get_errors(mutable) do
+    mutable.errors
   end
 
   @doc """

@@ -4,6 +4,7 @@ defmodule RuleEngine.Reduce do
   Reduction happens recursively for each value.
   If a value is quoted, the structure as is will be value.
   """
+  import RuleEngine.Types
   alias RuleEngine.Types.Token
   alias RuleEngine.Mutable
 
@@ -34,39 +35,47 @@ defmodule RuleEngine.Reduce do
         %Token{type: :function, macro: true} -> arbitrary.(params)
         %Token{type: :function} ->
           fn state ->
-            {vs, state2} = list_reduce(params).(state)
+            reduce_result = list_reduce(params).(state)
+            # Logger.info("Reduce list #{inspect params} -> #{inspect reduce_result}")
+            {vs, state2} = reduce_result
             arbitrary.(vs).(state2)
           end
         _ -> throw {:not_a_function, tok}
       end
     end
     fn state ->
-      {fun, state2} = reduce(f).(state)
-      {{fun_res, fun_ref}, state2} = case fun do
-        %Token{type: :function} = tok ->
-          {res, state2_1} = runfunc.(tok).(state2)
-          {{res, tok}, state2_1}
-        %Token{type: :symbol} ->
-            {tok, state2_1} = resolve_symbol(fun).(state2)
-            {res, state2_2} = runfunc.(tok).(state2_1)
-            {{res, tok}, state2_2}
-        _ -> throw {:not_a_function, fun}
+      try do
+        {fun, state} = reduce(f).(state)
+        {{fun_res, fun_ref}, state} = case fun do
+          %Token{type: :function} = tok ->
+            {res, state} = runfunc.(tok).(state)
+            {{res, tok}, state}
+          %Token{type: :symbol} ->
+            {tok, state} = resolve_symbol(fun).(state)
+            {res, state} = runfunc.(tok).(state)
+            {{res, tok}, state}
+          _ -> throw {:not_a_function, fun}
+        end
+        {result, state} = case fun_res do
+          fun when is_function(fun) ->
+            env = case fun_ref do
+              %Token{env: nil} -> Mutable.env_ref(state)
+              %Token{env: environment} -> environment
+            end
+            env_pre = Mutable.env_ref(state)
+            state = Mutable.env_override(state, env)
+            {res, state} = fun.(state)
+            state = Mutable.env_override(state, env_pre)
+            {res, state}
+          val -> {val, state}
+        end
+        {_, state} = add_reduction().(state)
+        {result, state}
+      catch
+        err ->
+          state = Mutable.handle_error(state, err)
+          {symbol(nil, mko(:error)), state}
       end
-      {result, state3} = case fun_res do
-        fun when is_function(fun) ->
-          env = case fun_ref do
-            %Token{env: nil} -> Mutable.env_ref(state2)
-            %Token{env: environment} -> environment
-          end
-          env_pre = Mutable.env_ref(state2)
-          state2_1 = Mutable.env_override(state2, env)
-          {res, state2_2} = fun.(state2_1)
-          state2_3 = Mutable.env_override(state2_2, env_pre)
-          {res, state2_3}
-        val -> {val, state2}
-      end
-      {_, state4} = add_reduction().(state3)
-      {result, state4}
     end
   end
   defp reduce_list(bad) do
@@ -80,12 +89,18 @@ defmodule RuleEngine.Reduce do
   @spec resolve_symbol(Token.t) :: Token.t
   def resolve_symbol(%Token{value: sy} = sy_tok) do
     fn state ->
-      tok = Mutable.env_lookup(state, sy)
-      result = case tok do
-        {:ok, val} -> val
-        :not_found -> throw {:no_symbol_found, sy_tok}
+      try do
+        tok = Mutable.env_lookup(state, sy)
+        result = case tok do
+          {:ok, val} -> val
+          :not_found -> throw {:no_symbol_found, sy_tok}
+        end
+        {result, state}
+      catch
+        err ->
+          state = Mutable.handle_error(state, err)
+          {symbol(nil, mko(:error)), state}
       end
-      {result, state}
     end
   end
 
@@ -117,9 +132,15 @@ defmodule RuleEngine.Reduce do
   end
   defp list_reduce([head | tail]) do
     fn state ->
-      {v, state2} = reduce(head).(state)
-      {r, state3} = list_reduce(tail).(state2)
-      {[v | r], state3}
+      try  do
+        {v, state2} = reduce(head).(state)
+        {r, state3} = list_reduce(tail).(state2)
+        {[v | r], state3}
+      catch
+        err ->
+          state = Mutable.handle_error(state, err)
+          {symbol(nil, mko(:error)), state}
+      end
     end
   end
   defp list_reduce(bad) do

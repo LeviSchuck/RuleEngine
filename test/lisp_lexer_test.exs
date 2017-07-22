@@ -2,19 +2,19 @@ defmodule RuleEngineLispLexerTest do
   use ExUnit.Case
   import RuleEngine.LISP.Lexer
 
-  def token_of({{token, _}, _, _}) when is_atom(token), do: token
-  def token_of({token, _, _}) when is_atom(token), do: token
-  def token_of({token, _, _, _}) when is_atom(token), do: token
+  def token_of({{token, _}, _}) when is_atom(token), do: token
+  def token_of({token, _}) when is_atom(token), do: token
+  def token_of({:error, _, _}), do: :error
   def token_of(unexpected), do: unexpected
 
-  def value_of({{_, v}, _, _}), do: v
-  def value_of({unexpected, _, _}), do: unexpected
+  def value_of({{_, v}, _}), do: v
+  def value_of({unexpected, _}), do: unexpected
   def value_of(unexpected), do: unexpected
 
   def assert_token(expected, tok) do
     case token_of(tok) do
       ^expected -> nil
-      unexpected -> assert(false, "Unexpected token: #{inspect unexpected}")
+      unexpected -> assert(false, "Unexpected token: #{inspect unexpected}, expected #{inspect expected}")
     end
   end
 
