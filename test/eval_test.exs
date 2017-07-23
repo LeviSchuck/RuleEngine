@@ -3,6 +3,8 @@ defmodule RuleEngineEvalTest do
   doctest RuleEngine
   import RuleEngine.Types
   import RuleEngine.Reduce
+  alias RuleEngine.Bootstrap
+  alias RuleEngine.Mutable
 
   test "reduce number" do
     v1 = number(1)
@@ -14,6 +16,54 @@ defmodule RuleEngineEvalTest do
     v1 = string("hello")
     {res, _} = reduce(v1).(nil)
     assert res == v1
+  end
+
+  test "cross source def and use" do
+    {:ok, defs1} = RuleEngine.parse_lisp("""
+(def aaa 100)
+(def abc (+ aaa aaa))
+    """, :test1)
+
+    {:ok, defs2} = RuleEngine.parse_lisp("""
+(def aaad (fn (before-d) (+ before-d 999)))
+(def xyz "test data")
+(def abcd (aaad abc))
+    """, :test2)
+
+    {:ok, defs3} = RuleEngine.parse_lisp("""
+(def xyz2 (aaad abcd))
+    """, :test3)
+
+    env = Bootstrap.bootstrap_mutable() |> Mutable.env_new()
+
+    env = [defs1, defs2, defs3] |> Enum.reduce(env, fn x, env ->
+      x |> Enum.reduce(env, fn x, env ->
+        {_, env} = reduce(x).(env)
+        env
+      end)
+    end)
+    {aaa, _} = reduce(symbol("aaa")).(env)
+    assert value_of(aaa) == 100
+
+    {abc, _} = reduce(symbol("abc")).(env)
+    assert value_of(abc) == value_of(aaa) + value_of(aaa)
+
+    {aaad, _} = reduce(symbol("aaad")).(env)
+    assert function?(aaad)
+
+    {abcd, _} = reduce(symbol("abcd")).(env)
+    assert value_of(abcd) == value_of(abc) + 999
+
+    {xyz, _} = reduce(symbol("xyz")).(env)
+    assert value_of(xyz) == "test data"
+
+    {xyz2, _} = reduce(symbol("xyz2")).(env)
+    assert value_of(xyz2) == value_of(abcd) + 999
+
+    assert source_of(aaa) == :test1
+    assert source_of(aaad) == :test2
+    assert source_of(xyz) == :test2
+
   end
 
 end

@@ -36,7 +36,6 @@ defmodule RuleEngine.Reduce do
         %Token{type: :function} ->
           fn state ->
             reduce_result = list_reduce(params).(state)
-            # Logger.info("Reduce list #{inspect params} -> #{inspect reduce_result}")
             {vs, state2} = reduce_result
             arbitrary.(vs).(state2)
           end

@@ -581,7 +581,7 @@ defmodule RuleEngine.Bootstrap do
                 end
                 {last, fun_state3}
               end
-            end)
+            end, bindings.origin)
             closure = add_closure(fun, Mutable.env_ref(state))
             {closure, state}
           end
@@ -606,7 +606,7 @@ defmodule RuleEngine.Bootstrap do
               _ -> throw err_type(:symbol, identifier, identifier)
             end
             {body_val, state3} = Reduce.reduce(body).(state2)
-            state4 = Mutable.env_set(state3, ident_ref.value, body_val)
+            state4 = Mutable.env_set(state3, value_of(ident_ref), body_val)
             {body_val, state4}
           end
         _ -> throw err_arity(2, length(ast))

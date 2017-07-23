@@ -2,8 +2,6 @@ defmodule RuleEngine.LISP.Parser do
   alias RuleEngine.LISP.Lexer
   alias RuleEngine.Types
 
-  require Logger
-
   defp parse_dead_content([{:whitespace, _} | rest]), do: parse_dead_content(rest)
   defp parse_dead_content([{{:comment, _}, _} | rest]), do: parse_dead_content(rest)
   defp parse_dead_content(lexed), do: lexed
@@ -205,7 +203,7 @@ defmodule RuleEngine.LISP.Parser do
       nil -> {:error, "Expected to parse a document, but failed to parse", Types.mko(:parser)}
       {:error, m, o} -> {:error, m, o}
       {:nothing} -> {:error, "Expected to parse a document, but the last thing to parse", Types.mko(:parser)}
-      _ -> Types.list([Types.symbol("do") | result])
+      _ -> result
     end
   end
   defp parse_document_chain([]), do: []

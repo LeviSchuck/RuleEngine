@@ -51,13 +51,13 @@ defmodule RuleEngine do
   end
 
   @spec parse_lisp(String.t, any)
-    :: {:ok, Token.t}
+    :: {:ok, [Token.t]}
     | {:error, String.t, Origin.t}
   def parse_lisp(input, source) do
     LISP.parse_document(input, source)
   end
 
-  @spec parse_lisp(String.t, any)
+  @spec parse_lisp_value(String.t, any)
     :: {:ok, Token.t}
     | {:error, String.t, Origin.t}
   def parse_lisp_value(input, source) do

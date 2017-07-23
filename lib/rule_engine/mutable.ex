@@ -70,6 +70,11 @@ defmodule RuleEngine.Mutable do
   end
 
   @doc """
+  Wraps the current environment
+  """
+  def env_new(mutable), do: env_new(mutable, %{})
+
+  @doc """
   Wraps the current environment in a new environment with different new data.
   """
   @spec env_new(t, %{}) :: t

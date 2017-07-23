@@ -157,6 +157,12 @@ defmodule RuleEngine.Types do
   @spec value_of(Token.t) :: any
   def value_of(%Token{value: val}), do: val
 
+  @doc "Gets the origin source of a token"
+  @spec source_of(Token.t) :: any | nil
+  def source_of(%Token{origin: nil}), do: nil
+  def source_of(%Token{origin: %Origin{source: source}}), do: source
+
+  @doc "Create annotation to track the origination of a token"
   def mko(source), do: %Origin{source: source}
   def mko(source, line, column), do: %Origin{source: source, line: line, column: column}
 

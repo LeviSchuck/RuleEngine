@@ -1,5 +1,4 @@
 defmodule RuleEngine.LISP.Lexer do
-  require Logger
   import RuleEngine.LISP.LexerHelper
   import RuleEngine.Types
 

@@ -82,11 +82,10 @@ defmodule RuleEngine.LISP do
   will evaluate without error.
   """
   @spec parse_document(String.t, any)
-    :: {:ok, Token.t}
+    :: {:ok, [Token.t]}
     | {:error, tuple}
   def parse_document(text, source) do
     case Parser.parse_exec_document(text, source) do
-      [x] -> {:ok, x}
       {:error, expected} -> {:error, {:parse_error, expected}}
       res -> res
     end
