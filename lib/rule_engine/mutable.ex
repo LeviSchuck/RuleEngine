@@ -23,13 +23,13 @@ defmodule RuleEngine.Mutable do
   @doc "Create a new atom with a given value"
   @spec atom_new(t, any) :: {t, integer}
   def atom_new(mutable, value) do
-    {[natom], nmutable1} = get_and_update_in(
+    {natom, nmutable1} = get_and_update_in(
       mutable,
-      [Lens.key(:next_atom)],
+      [Access.key!(:next_atom)],
       fn x ->
         {x, x + 1}
       end)
-    nmutable2 = update_in(nmutable1, [Lens.key(:atoms)], fn atoms ->
+    nmutable2 = update_in(nmutable1, [Access.key!(:atoms)], fn atoms ->
       Map.put(atoms, natom, value)
     end)
     {nmutable2, natom}
@@ -44,17 +44,14 @@ defmodule RuleEngine.Mutable do
   @doc "Set the value for an already existing atom"
   @spec atom_reset!(t, integer, any) :: {t, any}
   def atom_reset!(mutable, atom, value) do
-    lens = Lens.key(:atoms)
-      |> Lens.key(atom)
-    nmutable = update_in(mutable, [lens], fn _ -> value end)
+    nmutable = update_in(mutable, [Access.key!(:atoms), Access.key!(atom)], fn _ -> value end)
     {nmutable, value}
   end
 
   @doc "Increment the environment number, signifies uniqueness for later use."
   @spec env_inc(t) :: {integer, t}
   def env_inc(mutable) do
-    lens = [Lens.key(:environment_id)]
-    {[eid], nmutable} = get_and_update_in(mutable, lens, fn x ->
+    {eid, nmutable} = get_and_update_in(mutable, [Access.key!(:environment_id)], fn x ->
       {x, x + 1}
     end)
     {eid, nmutable}
@@ -66,7 +63,7 @@ defmodule RuleEngine.Mutable do
   """
   @spec env_override(t, %{}) :: t
   def env_override(mutable, environment) do
-    nmutable = update_in(mutable, [Lens.key(:environment)], fn _ ->
+    nmutable = update_in(mutable, [Access.key!(:environment)], fn _ ->
       environment
     end)
     nmutable
@@ -78,7 +75,7 @@ defmodule RuleEngine.Mutable do
   @spec env_new(t, %{}) :: t
   def env_new(mutable, data) do
     {env_id, nmutable1} = env_inc(mutable)
-    nmutable2 = update_in(nmutable1, [Lens.key(:environment)], fn outer ->
+    nmutable2 = update_in(nmutable1, [Access.key!(:environment)], fn outer ->
       %{
         outer: outer,
         vals: data,
@@ -95,7 +92,7 @@ defmodule RuleEngine.Mutable do
   @spec env_new(t, %{}, %{}) :: t
   def env_new(mutable, outer, data) do
     {env_id, nmutable1} = env_inc(mutable)
-    nmutable2 = update_in(nmutable1, [Lens.key(:environment)], fn _ ->
+    nmutable2 = update_in(nmutable1, [Access.key!(:environment)], fn _ ->
       %{
         outer: outer,
         vals: data,
@@ -120,19 +117,19 @@ defmodule RuleEngine.Mutable do
   @doc "Sets the error mode to crash"
   @spec errors_crash(t) :: t
   def errors_crash(mutable) do
-    update_in(mutable, [Lens.key(:error_mode)], fn _ -> :crash end)
+    update_in(mutable, [Access.key!(:error_mode)], fn _ -> :crash end)
   end
 
   @doc "Sets the error mode to crash"
   @spec errors_log(t) :: t
   def errors_log(mutable) do
-    update_in(mutable, [Lens.key(:error_mode)], fn _ -> :log end)
+    update_in(mutable, [Access.key!(:error_mode)], fn _ -> :log end)
   end
 
   @doc "Sets the error mode to ignore"
   @spec errors_ignore(t) :: t
   def errors_ignore(mutable) do
-    update_in(mutable, [Lens.key(:error_mode)], fn _ -> :ignore end)
+    update_in(mutable, [Access.key!(:error_mode)], fn _ -> :ignore end)
   end
 
   @doc "Handles an error according to the mutable environment setting"
@@ -141,7 +138,7 @@ defmodule RuleEngine.Mutable do
   def handle_error(mutable, error) do
     case mutable.error_mode do
       :crash -> throw {:crash, error}
-      :log -> update_in(mutable, [Lens.key(:errors)], fn st -> [error | st] end)
+      :log -> update_in(mutable, [Access.key!(:errors)], fn st -> [error | st] end)
       :ignore -> mutable
     end
   end
@@ -159,14 +156,10 @@ defmodule RuleEngine.Mutable do
   @spec env_set(t, any, any) :: t
   def env_set(mutable, key, value) do
     {env_id, nmutable1} = env_inc(mutable)
-    lens_vals = Lens.key(:environment)
-      |> Lens.key(:vals)
-    lens_id = Lens.key(:environment)
-      |> Lens.key(:id)
-    nmutable2 = update_in(nmutable1, [lens_vals], fn m ->
+    nmutable2 = update_in(nmutable1, [Access.key!(:environment), Access.key!(:vals)], fn m ->
       Map.put(m, key, value)
     end)
-    nmutable3 = update_in(nmutable2, [lens_id], fn _ ->
+    nmutable3 = update_in(nmutable2, [Access.key!(:environment), Access.key!(:id)], fn _ ->
       env_id
     end)
     nmutable3
@@ -175,9 +168,7 @@ defmodule RuleEngine.Mutable do
   @doc "Merge another environment into the current environment"
   @spec env_merge(t, %{}) :: t
   def env_merge(mutable, %{vals: values}) do
-    lens = Lens.key(:environment)
-      |> Lens.key(:vals)
-    nmutable = update_in(mutable, [lens], fn m ->
+    nmutable = update_in(mutable, [Access.key!(:environment), Access.key!(:vals)], fn m ->
       Map.merge(m, values)
     end)
     nmutable
@@ -192,10 +183,9 @@ defmodule RuleEngine.Mutable do
   @doc "Find a symbol in the selected environment."
   @spec env_retrieve_key(%{}, any) :: {:ok, any} | :not_found
   def env_retrieve_key(environment, key) do
-    lens = Lens.key(:vals)
-    case get_in(environment, [lens]) do
-      [] -> :not_found
-      [vals] ->
+    case get_in(environment, [Access.key!(:vals)]) do
+      nil -> :not_found
+      vals ->
         case Map.get(vals, key, :not_found) do
           :not_found -> :not_found
           res -> {:ok, res}
@@ -222,7 +212,7 @@ defmodule RuleEngine.Mutable do
   """
   @spec reductions_inc(t) :: t
   def reductions_inc(mutable) do
-    update_in(mutable, [Lens.key(:reductions)], fn x ->
+    update_in(mutable, [Access.key!(:reductions)], fn x ->
       x + 1
     end)
   end
@@ -235,7 +225,7 @@ defmodule RuleEngine.Mutable do
   """
   @spec reductions_reset(t) :: t
   def reductions_reset(mutable) do
-    update_in(mutable, [Lens.key(:reductions)], fn _ ->
+    update_in(mutable, [Access.key!(:reductions)], fn _ ->
       0
     end)
   end
@@ -243,7 +233,7 @@ defmodule RuleEngine.Mutable do
   @doc "Sets the maximum reductions that may be reached."
   @spec reductions_max(t, integer | :infinite) :: t
   def reductions_max(mutable, maximum) do
-    update_in(mutable, [Lens.key(:max_reductions)], fn _ ->
+    update_in(mutable, [Access.key!(:max_reductions)], fn _ ->
       maximum
     end)
   end
