@@ -266,11 +266,11 @@ defmodule RuleEngine.Bootstrap do
         :ok ->
           case args do
             [one] ->
-              number(-one.value)
+              number(-one.value, @origin)
             [first | rest] ->
               number(Enum.reduce(rest, first.value, fn x, y ->
                 y - x.value
-              end))
+              end), @origin)
           end
         _ -> type_check
       end
@@ -284,7 +284,7 @@ defmodule RuleEngine.Bootstrap do
         :ok ->
           number(Enum.reduce(args, 0, fn x, y ->
             x.value + y
-          end))
+          end), @origin)
         _ -> type_check
       end
     end

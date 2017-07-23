@@ -94,18 +94,18 @@ defmodule RuleEngineBootstrapTest do
 
   test "bootstrap: +" do
     fun = gfun("+")
-    assert number(100+200) == execute(fun, [number(100), number(200)])
-    assert number(100+100) == execute(fun, [number(100), number(100)])
-    assert number(100+100+100) == execute(fun, [number(100), number(100), number(100)])
-    assert number(100) == execute(fun, [number(100)])
+    assert number(100+200, @o) == execute(fun, [number(100), number(200)])
+    assert number(100+100, @o) == execute(fun, [number(100), number(100)])
+    assert number(100+100+100, @o) == execute(fun, [number(100), number(100), number(100)])
+    assert number(100, @o) == execute(fun, [number(100)])
   end
 
   test "bootstrap: -" do
     fun = gfun("-")
-    assert number(100-200) == execute(fun, [number(100), number(200)])
-    assert number(100-100) == execute(fun, [number(100), number(100)])
-    assert number(100-100-100) == execute(fun, [number(100), number(100), number(100)])
-    assert number(-100) == execute(fun, [number(100)])
+    assert number(100-200, @o) == execute(fun, [number(100), number(200)])
+    assert number(100-100, @o) == execute(fun, [number(100), number(100)])
+    assert number(100-100-100, @o) == execute(fun, [number(100), number(100), number(100)])
+    assert number(-100, @o) == execute(fun, [number(100)])
   end
 
   test "bootstrap: and" do
@@ -146,7 +146,7 @@ defmodule RuleEngineBootstrapTest do
 
   test "bootstrap: reduce" do
     fun = gfun("reduce")
-    assert number(5) == execute(fun, [
+    assert number(5, @o) == execute(fun, [
       list([symbol("quote"), list([number(3), number(2)])]),
       number(0),
       symbol("+")
@@ -308,7 +308,7 @@ defmodule RuleEngineBootstrapTest do
     sy_y = symbol("y")
     sy_fn = symbol("fn")
     sy_plus = symbol("+")
-    assert number(n1 + n1 + n2) == execute(let_fun, [
+    assert number(n1 + n1 + n2, @o) == execute(let_fun, [
       list([sy_y, number(n2)]),
       list([
         list([
@@ -333,7 +333,7 @@ defmodule RuleEngineBootstrapTest do
 
   test "bootstrap: apply" do
     app_fun = gfun("apply")
-    assert number(5) == execute(app_fun, [
+    assert number(5, @o) == execute(app_fun, [
       symbol("+"),
       list([
         symbol("quote"),
