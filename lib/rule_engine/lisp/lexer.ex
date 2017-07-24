@@ -64,10 +64,15 @@ defmodule RuleEngine.LISP.Lexer do
   def lexer_string(input, first_origin, origin, content) do
     first = String.first(input)
     rest = String.slice(input, 1..-1)
-    next_origin = %{origin | column: origin.column + 1}
+    next_origin = case first do
+      "\n" -> %{origin | column: 0, line: origin.line + 1}
+      "\r\n" -> %{origin | column: 0, line: origin.line + 1}
+      _ -> %{origin | column: origin.column + 1}
+    end
     lexer_string(rest, first_origin, next_origin, content <> first)
   end
   def lexer_comment(<<"\r\n", rest :: binary>>, origin, content) do
+
     next_origin = %{origin | line: origin.line + 1, column: 0}
     token = {{:comment, content}, origin}
     [token | lexer(rest, next_origin)]
@@ -188,19 +193,19 @@ defmodule RuleEngine.LISP.Lexer do
             token = {{:symbol, next_content}, first_origin}
             [token | lexer(rest, next_origin)]
           "'" ->
-            unexpected = {:error, "Tried to create a keyword starting with #{inspect next_content}, but got a quote in the middle. Quotes should only go before keywords, not in between.", origin}
+            unexpected = {:error, "Tried to create a keyword starting with #{inspect next_content}, but got a quote in the middle. Quotes should only go before keywords, not in between.", next_origin}
             [unexpected]
           "\"" ->
-            unexpected = {:error, "Tried to create a keyword starting with #{inspect next_content}, but got a double quote in the middle. Strings should be spaced away from keywords.", origin}
+            unexpected = {:error, "Tried to create a keyword starting with #{inspect next_content}, but got a double quote in the middle. Strings should be spaced away from keywords.", next_origin}
             [unexpected]
           "(" ->
-            unexpected = {:error, "Tried to create a keyword starting with #{inspect next_content}, but got a \"(\" in the middle. Parenthesis should be spaced away from keywords.", origin}
+            unexpected = {:error, "Tried to create a keyword starting with #{inspect next_content}, but got a \"(\" in the middle. Parenthesis should be spaced away from keywords.", next_origin}
             [unexpected]
           "%" ->
-            unexpected = {:error, "Tried to create a keyword starting with #{inspect next_content}, but got a \"%\" in the middle. Dicts should be spaced away from keywords.", origin}
+            unexpected = {:error, "Tried to create a keyword starting with #{inspect next_content}, but got a \"%\" in the middle. Dicts should be spaced away from keywords.", next_origin}
             [unexpected]
           "{" ->
-            unexpected = {:error, "Tried to create a keyword starting with #{inspect next_content}, but got a \"{\" in the middle. Dicts should be spaced away from keywords. This is also a malformed dict, as dicts should start with %{", origin}
+            unexpected = {:error, "Tried to create a keyword starting with #{inspect next_content}, but got a \"{\" in the middle. Dicts should be spaced away from keywords. This is also a malformed dict, as dicts should start with %{", next_origin}
             [unexpected]
           _ -> lexer_symbol(rest, origin, next_origin, next_content)
         end

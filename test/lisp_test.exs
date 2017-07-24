@@ -1,6 +1,5 @@
 defmodule RuleEngineLispTest do
   use ExUnit.Case
-  require Logger
 
   @moduletag timeout: 500
 
@@ -110,6 +109,15 @@ This should cause an error
 (hello 123)
     """
     assert_error(parse(lisp))
+  end
+
+  test "post content bad line check" do
+    lisp = "(hi hello world \r\n\"apples\r\nfruit\r\noranges\" 123 fruit cake)\r\n\r\nabc'efghi'j\"klm"
+    res = parse(lisp)
+    assert_error(res)
+    {:error, _, origin} = res
+    assert origin.line == 6
+    assert origin.column == 3
   end
 
   test "missing end paren" do
