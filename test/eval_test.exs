@@ -34,7 +34,7 @@ defmodule RuleEngineEvalTest do
 (def xyz2 (aaad abcd))
     """, :test3)
 
-    env = Bootstrap.bootstrap_mutable() |> Mutable.env_new()
+    env = Bootstrap.bootstrap_mutable() |> Mutable.push()
 
     env = [defs1, defs2, defs3] |> Enum.reduce(env, fn x, env ->
       x |> Enum.reduce(env, fn x, env ->

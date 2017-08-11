@@ -2,6 +2,7 @@ defmodule RuleEngineMutableTest do
   use ExUnit.Case
   import RuleEngine.Mutable
   alias RuleEngine.Mutable
+  alias RuleEngine.Environment
 
   test "mutable: atom new" do
     val = :secret
@@ -41,36 +42,30 @@ defmodule RuleEngineMutableTest do
     assert result == val_after
   end
 
+  def bootstrap_raw() do
+    %{boot: true}
+  end
   def bootstrap() do
-    %{
-      outer: nil,
-      vals: %{boot: true}
-    }
+    Environment.make(bootstrap_raw(), 0, :bootstrap)
   end
 
-  test "mutable: environment new" do
+  test "mutable: environment push" do
     vals = %{test: 123}
-    mut_before = %Mutable{}
+    mut_before = %Mutable{
+      environment: bootstrap(),
+    }
     mut_expected = %Mutable{
-      environment: %{
-        outer: bootstrap(),
-        vals: vals,
-        id: 1,
-      },
+      environment: Environment.make(vals, 1, bootstrap(), :test),
       environment_id: 2,
     }
-    mut_after = env_new(mut_before, bootstrap(), vals)
+    mut_after = push(mut_before, vals, :test)
     assert mut_expected == mut_after
   end
 
   test "mutable: environment set existing" do
     vals = %{test: 123}
     overwrite = 345
-    env = %{
-      outer: bootstrap(),
-      vals: vals,
-      id: 1
-    }
+    env = Environment.make(vals, 1, bootstrap())
     mut_before = %Mutable{
       environment: env,
       environment_id: 2,
@@ -82,21 +77,15 @@ defmodule RuleEngineMutableTest do
       },
       environment_id: 3
     }
-    mut_after = env_set(mut_before, :test, overwrite)
+    mut_after = set(mut_before, :test, overwrite)
     assert mut_expected == mut_after
   end
 
   test "mutable: environment set over" do
     vals = %{test: 123}
     overwrite = 333
-    env = %{
-      outer: %{
-        outer: bootstrap(),
-        vals: %{abc: 999}
-      },
-      vals: vals,
-      id: 1,
-    }
+    env = Environment.make(%{abc: 999}, 1, bootstrap())
+    env = Environment.make(vals, 2, env)
     mut_before = %Mutable{
       environment: env,
       environment_id: 2
@@ -108,7 +97,7 @@ defmodule RuleEngineMutableTest do
       },
       environment_id: 3
     }
-    mut_after = env_set(mut_before, :abc, overwrite)
+    mut_after = set(mut_before, :abc, overwrite)
     assert mut_expected == mut_after
   end
   test "mutable: environment merge" do
@@ -138,31 +127,24 @@ defmodule RuleEngineMutableTest do
     assert mut_expected == mut_after
   end
 
-  test "mutable: environment local get" do
-    env = %{
-      outer: %{
-        outer: bootstrap(),
-        vals: %{abc: 123}
-      },
-      vals: %{test1: 456}
-    }
-    assert {:ok, 456} == env_retrieve_key(env, :test1)
-    assert :not_found == env_retrieve_key(env, :test2)
-    assert :not_found == env_retrieve_key(env, :abc)
+  test "mutable: environment labeled get" do
+    env = Environment.make(%{abc: 123}, 1, bootstrap(), :depth1)
+    env = Environment.make(%{test1: 456}, 2, env, :depth2)
+    assert {:ok, 456} == Environment.get(env, :test1, :depth2)
+    assert :not_found == Environment.get(env, :test2, :depth2)
+    assert :not_found == Environment.get(env, :abc, :depth2)
+    assert :not_found == Environment.get(env, :test1, :depth1)
+    assert :not_found == Environment.get(env, :test2, :depth1)
+    assert {:ok, 123} == Environment.get(env, :abc, :depth1)
   end
 
   test "mutable: environment hierarchical get" do
-    env = %{
-      outer: %{
-        outer: bootstrap(),
-        vals: %{abc: 123}
-      },
-      vals: %{test1: 456}
-    }
-    assert {:ok, 456} == env_get(env, :test1)
-    assert :not_found == env_get(env, :test2)
-    assert {:ok, 123} == env_get(env, :abc)
-    assert {:ok, true} == env_get(env, :boot)
+    env = Environment.make(%{abc: 123}, 1, bootstrap(), :depth1)
+    env = Environment.make(%{test1: 456}, 2, env, :depth2)
+    assert {:ok, 456} == Environment.get(env, :test1)
+    assert :not_found == Environment.get(env, :test2)
+    assert {:ok, 123} == Environment.get(env, :abc)
+    assert {:ok, true} == Environment.get(env, :boot)
   end
 
 end

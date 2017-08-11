@@ -8,10 +8,13 @@ defmodule RuleEngine.Mutable do
   Enforcement of this occurs in `RuleEngine.Reduce`, but the data lives in
   this data structure.
   """
+
+  alias RuleEngine.Environment
+
   defstruct [
     next_atom: 1,
     atoms: %{},
-    environment: %{},
+    environment: %Environment{},
     environment_id: 1,
     reductions: 0,
     max_reductions: :infinite,
@@ -23,16 +26,16 @@ defmodule RuleEngine.Mutable do
   @doc "Create a new atom with a given value"
   @spec atom_new(t, any) :: {t, integer}
   def atom_new(mutable, value) do
-    {natom, nmutable1} = get_and_update_in(
+    {natom, mutable} = get_and_update_in(
       mutable,
       [Access.key!(:next_atom)],
       fn x ->
         {x, x + 1}
       end)
-    nmutable2 = update_in(nmutable1, [Access.key!(:atoms)], fn atoms ->
+    mutable = update_in(mutable, [Access.key!(:atoms)], fn atoms ->
       Map.put(atoms, natom, value)
     end)
-    {nmutable2, natom}
+    {mutable, natom}
   end
 
   @doc "Retrieve the value for an atom"
@@ -44,72 +47,42 @@ defmodule RuleEngine.Mutable do
   @doc "Set the value for an already existing atom"
   @spec atom_reset!(t, integer, any) :: {t, any}
   def atom_reset!(mutable, atom, value) do
-    nmutable = update_in(mutable, [Access.key!(:atoms), Access.key!(atom)], fn _ -> value end)
-    {nmutable, value}
-  end
-
-  @doc "Increment the environment number, signifies uniqueness for later use."
-  @spec env_inc(t) :: {integer, t}
-  def env_inc(mutable) do
-    {eid, nmutable} = get_and_update_in(mutable, [Access.key!(:environment_id)], fn x ->
-      {x, x + 1}
-    end)
-    {eid, nmutable}
+    mutable = update_in(mutable, [Access.key!(:atoms), Access.key!(atom)], fn _ -> value end)
+    {mutable, value}
   end
 
   @doc """
   Internal use only.
   Forcefully replaces the environment in the execution context.
   """
-  @spec env_override(t, %{}) :: t
-  def env_override(mutable, environment) do
-    nmutable = update_in(mutable, [Access.key!(:environment)], fn _ ->
+  @spec reset(t, Environment.t) :: t
+  def reset(mutable, environment) do
+    update_in(mutable, [Access.key!(:environment)], fn _ ->
       environment
     end)
-    nmutable
   end
 
   @doc """
-  Wraps the current environment
+  Wraps the current environment in a new environment with new data.
   """
-  def env_new(mutable), do: env_new(mutable, %{})
-
-  @doc """
-  Wraps the current environment in a new environment with different new data.
-  """
-  @spec env_new(t, %{}) :: t
-  def env_new(mutable, data) do
-    {env_id, nmutable1} = env_inc(mutable)
-    nmutable2 = update_in(nmutable1, [Access.key!(:environment)], fn outer ->
-      %{
-        outer: outer,
-        vals: data,
-        id: env_id
-      }
+  @spec push(t, %{}, atom | nil) :: t
+  def push(mutable, data \\ %{}, label \\ nil) do
+    {id, mutable} = env_inc(mutable)
+    update_in(mutable, [Access.key!(:environment)], fn outer ->
+      Environment.make(data, id, outer, label)
     end)
-    nmutable2
   end
 
   @doc """
-  Wraps the current environment in a new environment with a specified parent
-  environment.
+  Wraps the current environment in a new environment with no new data
+  but with a label.
   """
-  @spec env_new(t, %{}, %{}) :: t
-  def env_new(mutable, outer, data) do
-    {env_id, nmutable1} = env_inc(mutable)
-    nmutable2 = update_in(nmutable1, [Access.key!(:environment)], fn _ ->
-      %{
-        outer: outer,
-        vals: data,
-        id: env_id
-      }
-    end)
-    nmutable2
-  end
+  @spec push_label(t, atom) :: t
+  def push_label(mutable, label), do: push(mutable, %{}, label)
 
   @doc "Get the environment data from the execution context"
-  @spec env_ref(t) :: %{}
-  def env_ref(mutable) do
+  @spec reference(t) :: %{}
+  def reference(mutable) do
     mutable.environment
   end
 
@@ -149,8 +122,8 @@ defmodule RuleEngine.Mutable do
   end
 
   @doc "Handles an error according to the mutable environment setting"
-  @spec env_get_errors(t) :: [any]
-  def env_get_errors(mutable) do
+  @spec get_errors(t) :: [any]
+  def get_errors(mutable) do
     mutable.errors
   end
 
@@ -158,57 +131,30 @@ defmodule RuleEngine.Mutable do
   Set a key and value in the environment without making
   a new environment hierarchy
   """
-  @spec env_set(t, any, any) :: t
-  def env_set(mutable, key, value) do
-    {env_id, nmutable1} = env_inc(mutable)
-    nmutable2 = update_in(nmutable1, [Access.key!(:environment), Access.key!(:vals)], fn m ->
-      Map.put(m, key, value)
+  @spec set(t, any, any, atom | nil) :: t
+  def set(mutable, key, value, label \\ nil) do
+    {env_id, mutable} = env_inc(mutable)
+    mutable
+      |> update_in([Access.key!(:environment)], fn environment ->
+      Environment.put(environment, key, value, label)
     end)
-    nmutable3 = update_in(nmutable2, [Access.key!(:environment), Access.key!(:id)], fn _ ->
+      |> update_in([Access.key!(:environment), Access.key!(:id)], fn _ ->
       env_id
     end)
-    nmutable3
   end
 
   @doc "Merge another environment into the current environment"
   @spec env_merge(t, %{}) :: t
   def env_merge(mutable, %{vals: values}) do
-    nmutable = update_in(mutable, [Access.key!(:environment), Access.key!(:vals)], fn m ->
+    update_in(mutable, [Access.key!(:environment), Access.key!(:vals)], fn m ->
       Map.merge(m, values)
     end)
-    nmutable
   end
 
   @doc "Look up a symbol in the execution context."
-  @spec env_lookup(t, any) :: {:ok, any} | :not_found
-  def env_lookup(mutable, key) do
-    env_get(mutable.environment, key)
-  end
-
-  @doc "Find a symbol in the selected environment."
-  @spec env_retrieve_key(%{}, any) :: {:ok, any} | :not_found
-  def env_retrieve_key(environment, key) do
-    case get_in(environment, [Access.key!(:vals)]) do
-      nil -> :not_found
-      vals ->
-        case Map.get(vals, key, :not_found) do
-          :not_found -> :not_found
-          res -> {:ok, res}
-        end
-    end
-  end
-
-  @doc "Find a symbol in a hierarchy of environments"
-  @spec env_retrieve_key(%{}, any) :: {:ok, any} | :not_found
-  def env_get(environment, key) do
-    case env_retrieve_key(environment, key) do
-      :not_found ->
-        case environment.outer do
-          nil -> :not_found
-          parent -> env_get(parent, key)
-        end
-      {:ok, val} -> {:ok, val}
-    end
+  @spec lookup(t, any, atom | nil) :: {:ok, any} | :not_found
+  def lookup(mutable, key, label \\ nil) do
+    Environment.get(mutable.environment, key, label)
   end
 
   @doc """
@@ -240,6 +186,12 @@ defmodule RuleEngine.Mutable do
   def reductions_max(mutable, maximum) do
     update_in(mutable, [Access.key!(:max_reductions)], fn _ ->
       maximum
+    end)
+  end
+
+  defp env_inc(mutable) do
+    get_and_update_in(mutable, [Access.key!(:environment_id)], fn x ->
+      {x, x + 1}
     end)
   end
 end

@@ -58,13 +58,13 @@ defmodule RuleEngine.Reduce do
         {result, state} = case fun_res do
           fun when is_function(fun) ->
             env = case fun_ref do
-              %Token{env: nil} -> Mutable.env_ref(state)
+              %Token{env: nil} -> Mutable.reference(state)
               %Token{env: environment} -> environment
             end
-            env_pre = Mutable.env_ref(state)
-            state = Mutable.env_override(state, env)
+            env_pre = Mutable.reference(state)
+            state = Mutable.reset(state, env)
             {res, state} = fun.(state)
-            state = Mutable.env_override(state, env_pre)
+            state = Mutable.reset(state, env_pre)
             {res, state}
           val -> {val, state}
         end
@@ -89,7 +89,7 @@ defmodule RuleEngine.Reduce do
   def resolve_symbol(%Token{value: sy} = sy_tok) do
     fn state ->
       try do
-        tok = Mutable.env_lookup(state, sy)
+        tok = Mutable.lookup(state, sy)
         result = case tok do
           {:ok, val} -> val
           :not_found -> throw {:no_symbol_found, sy_tok}

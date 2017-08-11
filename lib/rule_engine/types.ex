@@ -31,6 +31,7 @@ defmodule RuleEngine.Types do
       macro: false,
       env: nil,
       origin: nil,
+      user_type: nil,
     ]
     @type t :: %__MODULE__{}
   end
@@ -148,6 +149,19 @@ defmodule RuleEngine.Types do
   """
   @spec hack(any, Origin.t) :: Token.t
   def hack(a, origin), do: mk(:hack, a, origin)
+
+  @doc "Adds a userland type to a token"
+  @spec with_type(Token.t, atom) :: Token.t
+  def with_type(tok, type), do: %{tok | user_type: type}
+
+  @doc "Userland type check"
+  @spec with_type?(Token.t, atom) :: Token.t
+  def with_type?(tok, type) do
+    case tok do
+      %Token{user_type: ^type} -> true
+      _ -> false
+    end
+  end
 
   @doc "Adds an environment to a macro function"
   @spec add_closure(Token.t, %{}) :: Token.t

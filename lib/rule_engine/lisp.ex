@@ -56,7 +56,7 @@ defmodule RuleEngine.LISP do
   """
   def main(environment) do
     mut = Bootstrap.bootstrap_mutable()
-      |> Mutable.env_new(environment)
+      |> Mutable.push(environment)
     loop(mut)
   end
 

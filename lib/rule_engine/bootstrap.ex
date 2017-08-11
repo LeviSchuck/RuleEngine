@@ -36,6 +36,7 @@ defmodule RuleEngine.Bootstrap do
 
   """
   alias RuleEngine.Mutable
+  alias RuleEngine.Environment
   alias RuleEngine.Reduce
   import RuleEngine.Types
   alias RuleEngine.Types.Token
@@ -47,64 +48,61 @@ defmodule RuleEngine.Bootstrap do
   @doc "Bootstrap environment with basic functions"
   @spec bootstrap_environment() :: %{}
   def bootstrap_environment do
-    %{
-      outer: nil,
-      vals: %{
-        # Comparators
-        "==" => mkfun(fn x, y -> x == y end, [:any, :any], @origin),
-        "!=" => mkfun(fn x, y -> x != y end, [:any, :any], @origin),
-        "<" => mkfun(fn x, y -> x < y end, [:any, :any], @origin),
-        ">" => mkfun(fn x, y -> x > y end, [:any, :any], @origin),
-        "<=" => mkfun(fn x, y -> x <= y end, [:any, :any], @origin),
-        ">=" => mkfun(fn x, y -> x >= y end, [:any, :any], @origin),
-        # Combinatoral
-        "&&" => mkfun(fn x, y -> x && y end, [:boolean, :boolean], @origin),
-        "||" => mkfun(fn x, y -> x || y end, [:boolean, :boolean], @origin),
-        "++" => mkfun(fn x, y -> x <> y end, [:string, :string], @origin),
-        # Folding Combinatoral operations
-        "+" => plus_fun(),
-        "-" => minus_fun(),
-        "and" => and_fun(),
-        "or" => or_fun(),
-        # Iteration
-        "map" => map_fun(),
-        "reduce" => reduce_fun(),
-        # Types
-        "nil?" => simple_fun(&nil?/1, @origin),
-        "boolean?" => simple_fun(&boolean?/1, @origin),
-        "symbol?" => simple_fun(&symbol?/1, @origin),
-        "list?" => simple_fun(&list?/1, @origin),
-        "dict?" => simple_fun(&dict?/1, @origin),
-        "string?" => simple_fun(&string?/1, @origin),
-        "number?" => simple_fun(&number?/1, @origin),
-        "function?" => simple_fun(&function?/1, @origin),
-        "macro?" => simple_fun(&macro?/1, @origin),
-        "atom?" => simple_fun(&atom?/1, @origin),
-        # Macros
-        "do" => do_fun(),
-        "quote" => quote_fun(),
-        "if" => if_fun(),
-        "let" => let_fun(),
-        "fn" => lambda_fun(),
-        "def" => def_fun(),
-        "apply" => apply_fun(),
-        "make-dict" => dict_fun(),
-        # Built in symbols
-        "true" => symbol(true, @origin),
-        true => symbol(true, @origin),
-        "false" => symbol(false, @origin),
-        false => symbol(false, @origin),
-        "nil" => symbol(nil, @origin),
-        nil => symbol(nil, @origin),
-        # Atom ops
-        "atom" => state_fun(&make_atom/1, [:any], @origin),
-        "deref" => state_fun(&deref_atom/1, [:atom], @origin),
-        "reset!" => state_fun(&reset_atom/2, [:atom, :any], @origin),
-        # "swap!" => mkfun(???, [:atom, :function])
-        "set!" => set_fun(),
-      },
-      id: 0
+    core = %{
+      # Comparators
+      "==" => mkfun(fn x, y -> x == y end, [:any, :any], @origin),
+      "!=" => mkfun(fn x, y -> x != y end, [:any, :any], @origin),
+      "<" => mkfun(fn x, y -> x < y end, [:any, :any], @origin),
+      ">" => mkfun(fn x, y -> x > y end, [:any, :any], @origin),
+      "<=" => mkfun(fn x, y -> x <= y end, [:any, :any], @origin),
+      ">=" => mkfun(fn x, y -> x >= y end, [:any, :any], @origin),
+      # Combinatoral
+      "&&" => mkfun(fn x, y -> x && y end, [:boolean, :boolean], @origin),
+      "||" => mkfun(fn x, y -> x || y end, [:boolean, :boolean], @origin),
+      "++" => mkfun(fn x, y -> x <> y end, [:string, :string], @origin),
+      # Folding Combinatoral operations
+      "+" => plus_fun(),
+      "-" => minus_fun(),
+      "and" => and_fun(),
+      "or" => or_fun(),
+      # Iteration
+      "map" => map_fun(),
+      "reduce" => reduce_fun(),
+      # Types
+      "nil?" => simple_fun(&nil?/1, @origin),
+      "boolean?" => simple_fun(&boolean?/1, @origin),
+      "symbol?" => simple_fun(&symbol?/1, @origin),
+      "list?" => simple_fun(&list?/1, @origin),
+      "dict?" => simple_fun(&dict?/1, @origin),
+      "string?" => simple_fun(&string?/1, @origin),
+      "number?" => simple_fun(&number?/1, @origin),
+      "function?" => simple_fun(&function?/1, @origin),
+      "macro?" => simple_fun(&macro?/1, @origin),
+      "atom?" => simple_fun(&atom?/1, @origin),
+      # Macros
+      "do" => do_fun(),
+      "quote" => quote_fun(),
+      "if" => if_fun(),
+      "let" => let_fun(),
+      "fn" => lambda_fun(),
+      "def" => def_fun(),
+      "apply" => apply_fun(),
+      "make-dict" => dict_fun(),
+      # Built in symbols
+      "true" => symbol(true, @origin),
+      true => symbol(true, @origin),
+      "false" => symbol(false, @origin),
+      false => symbol(false, @origin),
+      "nil" => symbol(nil, @origin),
+      nil => symbol(nil, @origin),
+      # Atom ops
+      "atom" => state_fun(&make_atom/1, [:any], @origin),
+      "deref" => state_fun(&deref_atom/1, [:atom], @origin),
+      "reset!" => state_fun(&reset_atom/2, [:atom, :any], @origin),
+      # "swap!" => mkfun(???, [:atom, :function])
+      "set!" => set_fun(),
     }
+    Environment.make(core, nil, :bootstrap)
   end
 
   @doc "Wraps the bootstrap environment in an execution context"
@@ -199,6 +197,7 @@ defmodule RuleEngine.Bootstrap do
                 other ->
                   cond do
                     other == t -> {:cont, {same, :ok}}
+                    with_type?(tok, other) -> {:cont, {same, :ok}}
                     true -> {:halt, {:error, err_type(other, t)}}
                   end
               end
@@ -510,7 +509,7 @@ defmodule RuleEngine.Bootstrap do
             case sy_ref do
               %Token{type: :symbol} ->
                 {sy_val, state3} = Reduce.reduce(val).(state2)
-                state4 = Mutable.env_set(state3, sy_ref.value, sy_val)
+                state4 = Mutable.set(state3, sy_ref.value, sy_val)
                 {sy_val, state4}
               _ -> throw err_type(:symbol, sy_ref.type, sy_ref)
             end
@@ -526,12 +525,12 @@ defmodule RuleEngine.Bootstrap do
           case bindings do
             %Token{type: :list} ->
               fn state ->
-                {vals, state2} = set_all(bindings.value, %{}).(state)
-                pre_env = Mutable.env_ref(state2)
-                state3 = Mutable.env_new(state2, vals)
-                {body_result, state4} = Reduce.reduce(body).(state3)
-                state5 = Mutable.env_override(state4, pre_env)
-                {body_result, state5}
+                {vals, state} = set_all(bindings.value, %{}).(state)
+                pre_env = Mutable.reference(state)
+                state = Mutable.push(state, vals)
+                {body_result, state} = Reduce.reduce(body).(state)
+                state = Mutable.reset(state, pre_env)
+                {body_result, state}
               end
             _ -> throw err_type(:list, bindings.type, bindings)
           end
@@ -576,13 +575,13 @@ defmodule RuleEngine.Bootstrap do
                   end)
                 # Finally, have the outside say it has placed the environment
                 last = fn final_state ->
-                  final_state2 = Mutable.env_new(final_state, vals)
+                  final_state2 = Mutable.push(final_state, vals)
                   Reduce.reduce(body).(final_state2)
                 end
                 {last, fun_state3}
               end
             end, bindings.origin)
-            closure = add_closure(fun, Mutable.env_ref(state))
+            closure = add_closure(fun, Mutable.reference(state))
             {closure, state}
           end
         _ -> throw err_arity(2, length(ast))
@@ -606,7 +605,7 @@ defmodule RuleEngine.Bootstrap do
               _ -> throw err_type(:symbol, identifier, identifier)
             end
             {body_val, state3} = Reduce.reduce(body).(state2)
-            state4 = Mutable.env_set(state3, value_of(ident_ref), body_val)
+            state4 = Mutable.set(state3, value_of(ident_ref), body_val)
             {body_val, state4}
           end
         _ -> throw err_arity(2, length(ast))
