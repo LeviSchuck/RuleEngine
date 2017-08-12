@@ -68,7 +68,7 @@ defmodule RuleEngine.Environment do
     case environment do
       %Environment{label: ^label} -> put(environment, key, value)
       %Environment{outer: nil} -> throw {:environment_not_found, label}
-      %Environment{outer: environment} ->
+      %Environment{outer: _} ->
         update_in(environment, [Access.key!(:outer)], fn parent ->
           put(parent, key, value, label)
         end)

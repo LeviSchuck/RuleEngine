@@ -100,42 +100,33 @@ defmodule RuleEngineMutableTest do
     mut_after = set(mut_before, :abc, overwrite)
     assert mut_expected == mut_after
   end
-  test "mutable: environment merge" do
-    env1 = %{
-      outer: %{
-        outer: bootstrap(),
-        vals: %{abc: 123}
-      },
-      vals: %{test1: 123}
-    }
-    env2 = %{
-      outer: %{
-        outer: bootstrap(),
-        vals: %{abc: 456}
-      },
-      vals: %{test2: 123}
-    }
-    mut_before = %Mutable{
-      environment: env1
-    }
-    mut_expected = %Mutable{
-      environment: %{env1|
-        vals: %{test1: 123, test2: 123}
-      }
-    }
-    mut_after = env_merge(mut_before, env2)
-    assert mut_expected == mut_after
-  end
 
   test "mutable: environment labeled get" do
     env = Environment.make(%{abc: 123}, 1, bootstrap(), :depth1)
     env = Environment.make(%{test1: 456}, 2, env, :depth2)
-    assert {:ok, 456} == Environment.get(env, :test1, :depth2)
-    assert :not_found == Environment.get(env, :test2, :depth2)
+    env = Environment.make(%{test20: 20}, 3, env, :depth3)
+    env = Environment.make(%{test80: 80}, 4, env, :depth4)
+
+    assert :not_found == Environment.get(env, :abc, :depth4)
+    assert :not_found == Environment.get(env, :abc, :depth3)
     assert :not_found == Environment.get(env, :abc, :depth2)
-    assert :not_found == Environment.get(env, :test1, :depth1)
-    assert :not_found == Environment.get(env, :test2, :depth1)
     assert {:ok, 123} == Environment.get(env, :abc, :depth1)
+
+    assert :not_found == Environment.get(env, :test1, :depth4)
+    assert :not_found == Environment.get(env, :test1, :depth3)
+    assert {:ok, 456} == Environment.get(env, :test1, :depth2)
+    assert :not_found == Environment.get(env, :test1, :depth1)
+
+    assert :not_found == Environment.get(env, :test20, :depth4)
+    assert {:ok, 20} == Environment.get(env, :test20, :depth3)
+    assert :not_found == Environment.get(env, :test20, :depth2)
+    assert :not_found == Environment.get(env, :test20, :depth1)
+
+    assert {:ok, 80} == Environment.get(env, :test80, :depth4)
+    assert :not_found == Environment.get(env, :test80, :depth3)
+    assert :not_found == Environment.get(env, :test80, :depth2)
+    assert :not_found == Environment.get(env, :test80, :depth1)
+
   end
 
   test "mutable: environment hierarchical get" do
@@ -145,6 +136,37 @@ defmodule RuleEngineMutableTest do
     assert :not_found == Environment.get(env, :test2)
     assert {:ok, 123} == Environment.get(env, :abc)
     assert {:ok, true} == Environment.get(env, :boot)
+  end
+
+  test "mutable: environment labeled put" do
+    env = Environment.make(%{}, 1, bootstrap(), :depth1)
+    env = Environment.make(%{}, 2, env, :depth2)
+    env = Environment.make(%{}, 3, env, :depth3)
+    env = Environment.make(%{}, 4, env, :depth4)
+    env = Environment.put(env, :test1, 456, :depth2)
+    env = Environment.put(env, :abc, 123, :depth1)
+    env = Environment.put(env, :test80, 80, :depth4)
+    env = Environment.put(env, :test20, 20, :depth3)
+
+    assert :not_found == Environment.get(env, :abc, :depth4)
+    assert :not_found == Environment.get(env, :abc, :depth3)
+    assert :not_found == Environment.get(env, :abc, :depth2)
+    assert {:ok, 123} == Environment.get(env, :abc, :depth1)
+
+    assert :not_found == Environment.get(env, :test1, :depth4)
+    assert :not_found == Environment.get(env, :test1, :depth3)
+    assert {:ok, 456} == Environment.get(env, :test1, :depth2)
+    assert :not_found == Environment.get(env, :test1, :depth1)
+
+    assert :not_found == Environment.get(env, :test20, :depth4)
+    assert {:ok, 20} == Environment.get(env, :test20, :depth3)
+    assert :not_found == Environment.get(env, :test20, :depth2)
+    assert :not_found == Environment.get(env, :test20, :depth1)
+
+    assert {:ok, 80} == Environment.get(env, :test80, :depth4)
+    assert :not_found == Environment.get(env, :test80, :depth3)
+    assert :not_found == Environment.get(env, :test80, :depth2)
+    assert :not_found == Environment.get(env, :test80, :depth1)
   end
 
 end

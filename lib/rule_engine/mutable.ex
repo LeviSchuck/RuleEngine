@@ -143,14 +143,6 @@ defmodule RuleEngine.Mutable do
     end)
   end
 
-  @doc "Merge another environment into the current environment"
-  @spec env_merge(t, %{}) :: t
-  def env_merge(mutable, %{vals: values}) do
-    update_in(mutable, [Access.key!(:environment), Access.key!(:vals)], fn m ->
-      Map.merge(m, values)
-    end)
-  end
-
   @doc "Look up a symbol in the execution context."
   @spec lookup(t, any, atom | nil) :: {:ok, any} | :not_found
   def lookup(mutable, key, label \\ nil) do
