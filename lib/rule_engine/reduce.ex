@@ -57,14 +57,14 @@ defmodule RuleEngine.Reduce do
         end
         {result, state} = case fun_res do
           fun when is_function(fun) ->
-            env = case fun_ref do
-              %Token{env: nil} -> Mutable.reference(state)
-              %Token{env: environment} -> environment
+            stack = case fun_ref do
+              %Token{stack: nil} -> Mutable.stack(state)
+              %Token{stack: stack} -> stack
             end
-            env_pre = Mutable.reference(state)
-            state = Mutable.reset(state, env)
+            stack_pre = Mutable.stack(state)
+            state = Mutable.return(state, stack)
             {res, state} = fun.(state)
-            state = Mutable.reset(state, env_pre)
+            state = Mutable.return(state, stack_pre)
             {res, state}
           val -> {val, state}
         end

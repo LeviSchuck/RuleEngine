@@ -526,10 +526,10 @@ defmodule RuleEngine.Bootstrap do
             %Token{type: :list} ->
               fn state ->
                 {vals, state} = set_all(bindings.value, %{}).(state)
-                pre_env = Mutable.reference(state)
-                state = Mutable.push(state, vals)
+                stack = Mutable.stack(state)
+                state = Mutable.frame(state, vals, source_of(bindings))
                 {body_result, state} = Reduce.reduce(body).(state)
-                state = Mutable.reset(state, pre_env)
+                state = Mutable.return(state, stack)
                 {body_result, state}
               end
             _ -> throw err_type(:list, bindings.type, bindings)
@@ -574,14 +574,14 @@ defmodule RuleEngine.Bootstrap do
                     {Map.put(vs, k.value, res), post_state}
                   end)
                 # Finally, have the outside say it has placed the environment
-                last = fn final_state ->
-                  final_state2 = Mutable.push(final_state, vals)
-                  Reduce.reduce(body).(final_state2)
+                last = fn state ->
+                  state = Mutable.frame(state, vals, source_of(body))
+                  Reduce.reduce(body).(state)
                 end
                 {last, fun_state3}
               end
             end, bindings.origin)
-            closure = add_closure(fun, Mutable.reference(state))
+            closure = add_closure(fun, Mutable.stack(state), source_of(body))
             {closure, state}
           end
         _ -> throw err_arity(2, length(ast))

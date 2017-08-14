@@ -10,12 +10,14 @@ defmodule RuleEngine.Mutable do
   """
 
   alias RuleEngine.Environment
+  alias RuleEngine.Stack
 
   defstruct [
     next_atom: 1,
     atoms: %{},
     environment: %Environment{},
     environment_id: 1,
+    stack: %Stack{},
     reductions: 0,
     max_reductions: :infinite,
     errors: [],
@@ -55,35 +57,57 @@ defmodule RuleEngine.Mutable do
   Internal use only.
   Forcefully replaces the environment in the execution context.
   """
-  @spec reset(t, Environment.t) :: t
-  def reset(mutable, environment) do
+  @spec replace(t, Environment.t) :: t
+  def replace(mutable, environment) do
     update_in(mutable, [Access.key!(:environment)], fn _ ->
       environment
     end)
   end
 
   @doc """
+  Internal use only.
+  Forcefully replaces the stack in the execution context.
+  """
+  @spec return(t, Stack.t) :: t
+  def return(mutable, stack) do
+    update_in(mutable, [Access.key!(:stack)], fn _ ->
+      stack
+    end)
+  end
+
+  @doc """
   Wraps the current environment in a new environment with new data.
   """
-  @spec push(t, %{}, atom | nil) :: t
-  def push(mutable, data \\ %{}, label \\ nil) do
+  @spec layer(t, %{}, atom | nil) :: t
+  def layer(mutable, data \\ %{}, label \\ nil) do
     {id, mutable} = env_inc(mutable)
     update_in(mutable, [Access.key!(:environment)], fn outer ->
       Environment.make(data, id, outer, label)
     end)
   end
 
+
   @doc """
-  Wraps the current environment in a new environment with no new data
-  but with a label.
+  Pushes a stack frame with the data given
   """
-  @spec push_label(t, atom) :: t
-  def push_label(mutable, label), do: push(mutable, %{}, label)
+  @spec frame(t, %{}, Origin.t) :: t
+  def frame(mutable, data \\ %{}, origin) do
+    {_, mutable} = env_inc(mutable)
+    update_in(mutable, [Access.key!(:stack)], fn parent ->
+      Stack.push(parent, data, origin)
+    end)
+  end
 
   @doc "Get the environment data from the execution context"
-  @spec reference(t) :: %{}
-  def reference(mutable) do
+  @spec environment(t) :: Environment.t
+  def environment(mutable) do
     mutable.environment
+  end
+
+  @doc "Get the stack data from the execution context"
+  @spec stack(t) :: Stack.t
+  def stack(mutable) do
+    mutable.stack
   end
 
   @doc "Get the error mode"
@@ -145,7 +169,14 @@ defmodule RuleEngine.Mutable do
 
   @doc "Look up a symbol in the execution context."
   @spec lookup(t, any, atom | nil) :: {:ok, any} | :not_found
-  def lookup(mutable, key, label \\ nil) do
+  def lookup(mutable, key, label \\ nil)
+  def lookup(mutable, key, nil) do
+    case Stack.get(mutable.stack, key) do
+      :not_found -> Environment.get(mutable.environment, key, nil)
+      {:ok, value} -> {:ok, value}
+    end
+  end
+  def lookup(mutable, key, label) do
     Environment.get(mutable.environment, key, label)
   end
 

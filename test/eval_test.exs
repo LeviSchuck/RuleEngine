@@ -28,13 +28,16 @@ defmodule RuleEngineEvalTest do
 (def aaad (fn (before-d) (+ before-d 999)))
 (def xyz "test data")
 (def abcd (aaad abc))
+(def nnnn (fn () (+ aaa bbbb)))
     """, :test2)
 
     {:ok, defs3} = RuleEngine.parse_lisp("""
+(def bbbb 200)
 (def xyz2 (aaad abcd))
+(def cccc (nnnn))
     """, :test3)
 
-    env = Bootstrap.bootstrap_mutable() |> Mutable.push()
+    env = Bootstrap.bootstrap_mutable() |> Mutable.layer()
 
     env = [defs1, defs2, defs3] |> Enum.reduce(env, fn x, env ->
       x |> Enum.reduce(env, fn x, env ->
@@ -59,6 +62,9 @@ defmodule RuleEngineEvalTest do
 
     {xyz2, _} = reduce(symbol("xyz2")).(env)
     assert value_of(xyz2) == value_of(abcd) + 999
+
+    {cccc, _} = reduce(symbol("cccc")).(env)
+    assert value_of(cccc) == value_of(aaa) + 200
 
     assert source_of(aaa) == :test1
     assert source_of(aaad) == :test2

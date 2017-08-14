@@ -58,7 +58,7 @@ defmodule RuleEngineMutableTest do
       environment: Environment.make(vals, 1, bootstrap(), :test),
       environment_id: 2,
     }
-    mut_after = push(mut_before, vals, :test)
+    mut_after = layer(mut_before, vals, :test)
     assert mut_expected == mut_after
   end
 

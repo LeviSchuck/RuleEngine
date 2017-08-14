@@ -18,6 +18,8 @@ defmodule RuleEngine.Types do
 
   Symbols may be `true`, `false`, `nil`, or a string.
   """
+  alias RuleEngine.Stack
+
   defmodule Token do
     @moduledoc """
     Token data structure used for each AST element.
@@ -29,7 +31,7 @@ defmodule RuleEngine.Types do
       value: nil,
       meta: nil,
       macro: false,
-      env: nil,
+      stack: nil,
       origin: nil,
       user_type: nil,
     ]
@@ -163,9 +165,9 @@ defmodule RuleEngine.Types do
     end
   end
 
-  @doc "Adds an environment to a macro function"
-  @spec add_closure(Token.t, %{}) :: Token.t
-  def add_closure(fun, env), do: %{fun | env: env}
+  @doc "Adds an stack to a macro function"
+  @spec add_closure(Token.t, Stack.t, Origin.t) :: Token.t
+  def add_closure(fun, stack, origin), do: %{fun | stack: Stack.squash(stack, origin)}
 
   @doc "Access the value of a token"
   @spec value_of(Token.t) :: any
