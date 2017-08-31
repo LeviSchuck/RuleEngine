@@ -44,6 +44,7 @@ defmodule RuleEngine.Reduce do
     end
     fn state ->
       try do
+        {_, state} = add_reduction().(state)
         {fun, state} = reduce(f).(state)
         {{fun_res, fun_ref}, state} = case fun do
           %Token{type: :function} = tok ->
@@ -68,7 +69,6 @@ defmodule RuleEngine.Reduce do
             {res, state}
           val -> {val, state}
         end
-        {_, state} = add_reduction().(state)
         {result, state}
       catch
         err ->

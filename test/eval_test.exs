@@ -71,5 +71,24 @@ defmodule RuleEngineEvalTest do
     assert source_of(xyz) == :test2
 
   end
+  test "Infinite recursion should like not be infinite" do
+    {:ok, defs} = RuleEngine.parse_lisp("""
+(def infinity (fn () (infinity)))
+(infinity)
+    """, :test1)
+    env = Bootstrap.bootstrap_mutable()
+      |> Mutable.push()
+      |> Mutable.reductions_max(1000)
+    try do
+      defs |> Enum.reduce(env, fn x, env ->
+        {_, env} = reduce(x).(env)
+        env
+      end)
+      assert false
+    catch
+      {:crash, _} -> nil
+    end
+
+  end
 
 end
