@@ -77,7 +77,7 @@ defmodule RuleEngineEvalTest do
 (infinity)
     """, :test1)
     env = Bootstrap.bootstrap_mutable()
-      |> Mutable.push()
+      |> Mutable.layer(%{},:test)
       |> Mutable.reductions_max(1000)
     try do
       defs |> Enum.reduce(env, fn x, env ->

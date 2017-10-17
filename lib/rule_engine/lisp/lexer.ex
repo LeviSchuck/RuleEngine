@@ -52,6 +52,30 @@ defmodule RuleEngine.LISP.Lexer do
     next_origin = %{origin | column: origin.column + 2}
     lexer_string(rest, first_origin, next_origin, content <> "\"")
   end
+  def lexer_string(<<"\\n", rest :: binary>>, first_origin, origin, content) do
+    next_origin = %{origin | column: origin.column + 2}
+    lexer_string(rest, first_origin, next_origin, content <> "\n")
+  end
+  def lexer_string(<<"\\t", rest :: binary>>, first_origin, origin, content) do
+    next_origin = %{origin | column: origin.column + 2}
+    lexer_string(rest, first_origin, next_origin, content <> "\t")
+  end
+  def lexer_string(<<"\\r", rest :: binary>>, first_origin, origin, content) do
+    next_origin = %{origin | column: origin.column + 2}
+    lexer_string(rest, first_origin, next_origin, content <> "\r")
+  end
+  def lexer_string(<<"\\\\", rest :: binary>>, first_origin, origin, content) do
+    next_origin = %{origin | column: origin.column + 2}
+    lexer_string(rest, first_origin, next_origin, content <> "\\")
+  end
+  def lexer_string(<<"\\'", rest :: binary>>, first_origin, origin, content) do
+    next_origin = %{origin | column: origin.column + 2}
+    lexer_string(rest, first_origin, next_origin, content <> "'")
+  end
+  def lexer_string(<<"\\b", rest :: binary>>, first_origin, origin, content) do
+    next_origin = %{origin | column: origin.column + 2}
+    lexer_string(rest, first_origin, next_origin, content <> "\b")
+  end
   def lexer_string(<<"\"", rest :: binary>>, first_origin, origin, content) do
     next_origin = %{origin | column: origin.column + 1}
     token = {{:string, content}, first_origin}
